@@ -1,0 +1,21 @@
+[build-system]
+requires = ["scikit-build-core>=0.10"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "caravangl"
+version = "0.1.0"
+description = "Modern Isolated OpenGL Context for Python 3.14"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [{ name = "Your Name" }]
+
+[tool.scikit-build]
+build.verbose = true
+
+# This tells scikit-build-core that our module "caravangl" 
+# is located in the "src" directory (or will be built there)
+wheel.packages = ["src/caravangl"]
+
+[tool.scikit-build.editable]
+mode = "redirect"
