@@ -67,6 +67,11 @@ typedef struct CaravanFramebuffer {
   bool has_stencil;
 } CaravanFramebuffer;
 
+typedef struct CaravanRect {
+    GLint x, y;
+    GLsizei w, h;
+} CaravanRect;
+
 // -----------------------------------------------------------------------------
 // Context & State Tracking
 // -----------------------------------------------------------------------------
@@ -87,10 +92,7 @@ typedef struct CaravanContext {
     GLuint texture_units[GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS];
   } bound;
 
-  struct {
-    GLint x, y;
-    GLsizei w, h;
-  } viewport;
+  CaravanRect viewport; 
 
   struct {
     GLint max_texture_size;

@@ -23,7 +23,10 @@ typedef struct CaravanState {
 
 [[maybe_unused]]
 static inline CaravanState *get_caravan_state(PyObject *m) {
-  return (CaravanState *)PyModule_GetState(m);
+    if (!m || !PyModule_Check(m)) {
+        return NULL;
+    }
+    return (CaravanState *)PyModule_GetState(m);
 }
 
 static inline CaravanGLTable gl_table(PyObject *m) {
@@ -31,6 +34,9 @@ static inline CaravanGLTable gl_table(PyObject *m) {
 }
 
 #define WithCaravanGL(module_ptr, gl_name)                                     \
-  for (auto state = get_caravan_state(module_ptr); state != nullptr;           \
-       state = nullptr)                                                        \
-    for (auto gl_name = state->gl; state != nullptr; state = nullptr)
+  for (PyObject *_cv_m = (PyObject *)(module_ptr); _cv_m != nullptr;           \
+       _cv_m = nullptr)                                                        \
+    for (CaravanState *state = get_caravan_state(_cv_m); state != nullptr;      \
+         state = nullptr)                                                      \
+      for (CaravanGLTable gl_name = state->gl; _cv_m != nullptr;               \
+           _cv_m = nullptr)
