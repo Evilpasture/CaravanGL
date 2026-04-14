@@ -1,7 +1,9 @@
 #pragma once
 #include "caravangl_specs.h"
 #include <Python.h>
+#if __has_include("caravangl_arg_indices.h")
 #include "caravangl_arg_indices.h"
+#endif
 
 typedef struct CaravanGLTable {
 #define GL_PTR_GEN(ret, name, ...) ret(GL_API *name)(__VA_ARGS__);
@@ -20,7 +22,9 @@ typedef struct CaravanState {
   PyObject *CaravanError;
   CaravanContext ctx;
   CaravanGLTable gl;
+  #if __has_include("caravangl_arg_indices.h")
   CaravanParsers parsers;
+  #endif
 } CaravanState;
 
 [[maybe_unused]]
