@@ -82,8 +82,7 @@ typedef struct CaravanContext {
         GLuint fbo_read;
         GLuint fbo_draw;
         
-        // Use the constants we just added
-        GLuint ubo[GL_MIN_UNIFORM_BUFFER_BINDINGS];
+        GLuint ubo[GL_MAX_UNIFORM_BUFFER_BINDINGS];
         GLuint texture_units[GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS]; 
     } bound;
 
