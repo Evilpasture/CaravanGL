@@ -979,6 +979,13 @@ typedef enum ImageFormatTupleIndex : uint8_t {
 // Format: X(Return Type, Function Name, Arguments...)
 // -----------------------------------------------------------------------------
 
+#ifdef __APPLE__
+  // On Mac, we mark 4.2+ as deprecated/unavailable to trigger IDE warnings
+  #define CARAVAN_GL_DEPRECATED(msg) [[deprecated(msg)]]
+#else
+  #define CARAVAN_GL_DEPRECATED(msg)
+#endif
+
 // ======================= OPENGL 3.3 CORE =======================
 #define GL_FUNCTIONS_3_3_CORE(X)                                               \
   X(void, CullFace, GLenum mode)                                               \

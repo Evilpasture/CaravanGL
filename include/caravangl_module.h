@@ -6,15 +6,24 @@
 #endif
 
 typedef struct CaravanGLTable {
-#define GL_PTR_GEN(ret, name, ...) ret(GL_API *name)(__VA_ARGS__);
+  // 3.3 is safe on Mac
+  #define GL_PTR_GEN(ret, name, ...) ret(GL_API *name)(__VA_ARGS__);
   GL_FUNCTIONS_3_3_CORE(GL_PTR_GEN)
-  GL_FUNCTIONS_4_2_CORE(GL_PTR_GEN)
-  GL_FUNCTIONS_4_3_CORE(GL_PTR_GEN)
-  GL_FUNCTIONS_4_4_CORE(GL_PTR_GEN)
-  GL_FUNCTIONS_4_3_OPTIONAL(GL_PTR_GEN)
-  GL_FUNCTIONS_4_6_OPTIONAL(GL_PTR_GEN)
-  GL_FUNCTIONS_EXT_BINDLESS(GL_PTR_GEN)
-#undef GL_PTR_GEN
+  #undef GL_PTR_GEN
+
+  // 4.2+ gets the "Silly Apple" treatment
+  #define GL_PTR_DEPRECATED(ret, name, ...) \
+    CARAVAN_GL_DEPRECATED("OpenGL 4.2+ is not supported on macOS") \
+    ret(GL_API *name)(__VA_ARGS__);
+
+  GL_FUNCTIONS_4_2_CORE(GL_PTR_DEPRECATED)
+  GL_FUNCTIONS_4_3_CORE(GL_PTR_DEPRECATED)
+  GL_FUNCTIONS_4_4_CORE(GL_PTR_DEPRECATED)
+  GL_FUNCTIONS_4_3_OPTIONAL(GL_PTR_DEPRECATED)
+  GL_FUNCTIONS_4_6_OPTIONAL(GL_PTR_DEPRECATED)
+  GL_FUNCTIONS_EXT_BINDLESS(GL_PTR_DEPRECATED)
+  
+  #undef GL_PTR_DEPRECATED
 } CaravanGLTable;
 
 typedef struct CaravanState {
