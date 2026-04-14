@@ -24,17 +24,20 @@ static PyObject* caravan_init(PyObject* m, PyObject* loader) {
  * Proof-of-concept using the inferred 'gl' table.
  */
 static PyObject* caravan_test_render(PyObject* m, [[maybe_unused]] PyObject* args) {
-    // C23: auto infers 'CaravanGLTable' from gl_table(m)
     auto gl = gl_table(m);
 
-    gl.ClearColor(0.1f, 0.2f, 0.3f, 1.0f);
-    gl.Clear(GL_COLOR_BUFFER_BIT);
-    
-    GLint viewport[4];
-    gl.GetIntegerv(0x0BA2, viewport); // GL_VIEWPORT
+    // 1. Define the color as a vector (spec-pure)
+    const GLfloat clear_color[] = { 0.1f, 0.2f, 0.3f, 1.0f };
 
-    printf("CaravanGL: Test render cleared screen. Viewport: %d, %d, %d, %d\n", 
-            viewport[0], viewport[1], viewport[2], viewport[3]);
+    // 2. Replace ClearColor + Clear with one call
+    // GL_COLOR is the 'buffer' type
+    // 0 is the draw buffer index (usually GL_BACK)
+    gl.ClearBufferfv(GL_COLOR, 0, clear_color);
+    
+    GLint v[4];
+    gl.GetIntegerv(GL_VIEWPORT, v);
+
+    printf("CaravanGL: Modern ClearBuffer. Viewport: %d %d %d %d\n", v[0], v[1], v[2], v[3]);
 
     Py_RETURN_NONE;
 }
