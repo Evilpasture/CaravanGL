@@ -1,6 +1,7 @@
 #pragma once
 #include "caravangl_specs.h"
 #include <Python.h>
+#include "caravangl_arg_indices.h"
 
 typedef struct CaravanGLTable {
 #define GL_PTR_GEN(ret, name, ...) ret(GL_API *name)(__VA_ARGS__);
@@ -18,13 +19,14 @@ typedef struct CaravanState {
   PyTypeObject *BufferType;
   PyObject *CaravanError;
   CaravanContext ctx;
-  CaravanGLTable gl; // Use the named type here
+  CaravanGLTable gl;
+  CaravanParsers parsers;
 } CaravanState;
 
 [[maybe_unused]]
 static inline CaravanState *get_caravan_state(PyObject *m) {
     if (!m || !PyModule_Check(m)) {
-        return NULL;
+        return nullptr;
     }
     return (CaravanState *)PyModule_GetState(m);
 }
@@ -40,3 +42,39 @@ static inline CaravanGLTable gl_table(PyObject *m) {
          state = nullptr)                                                      \
       for (CaravanGLTable gl_name = state->gl; _cv_m != nullptr;               \
            _cv_m = nullptr)
+
+#ifdef NDEBUG
+    /* --- RELEASE MODE: High Performance, No Stalls --- */
+    
+    // Just execute the call. No error checking, no stalls.
+    #define CARAVAN_GL_CHECK(gl_ptr, call) (call)
+    #define CARAVAN_GL_CHECK_INT(gl_ptr, call) (call)
+
+#else
+    /* --- DEBUG MODE: Strict Error Checking --- */
+
+    #define CARAVAN_GL_CHECK(gl_ptr, call)                                     \
+      do {                                                                     \
+        while ((gl_ptr).GetError() != GL_NO_ERROR);                            \
+        (call);                                                                \
+        GLenum _cv_err = (gl_ptr).GetError();                                  \
+        if (_cv_err != GL_NO_ERROR) {                             \
+          PyErr_Format(PyExc_RuntimeError, "OpenGL Error [0x%04X] in: %s",     \
+                       _cv_err, #call);                                        \
+          return nullptr;                                                      \
+        }                                                                      \
+      } while (false)
+
+    #define CARAVAN_GL_CHECK_INT(gl_ptr, call)                                 \
+      do {                                                                     \
+        while ((gl_ptr).GetError() != GL_NO_ERROR);                            \
+        (call);                                                                \
+        GLenum _cv_err = (gl_ptr).GetError();                                  \
+        if (_cv_err != GL_NO_ERROR) {                             \
+          PyErr_Format(PyExc_RuntimeError, "OpenGL Error [0x%04X] in: %s",     \
+                       _cv_err, #call);                                        \
+          return -1;                                                           \
+        }                                                                      \
+      } while (false)
+
+#endif
