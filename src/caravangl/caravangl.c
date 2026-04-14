@@ -1,78 +1,71 @@
 #define PY_SSIZE_T_CLEAN
+#include "caravangl.h"
 #include <Python.h>
 #include <stdio.h>
-#include "caravangl.h"
 
 /**
  * caravan.init(loader)
  * Initializes the per-interpreter OpenGL function table.
  */
-static PyObject* caravan_init(PyObject* m, PyObject* loader) {
-    // We need the full state here to pass to the loader
-    auto* state = get_caravan_state(m);
-    
-    if (load_gl(state, loader) < 0) {
-        return nullptr; // Error already set by load_gl
-    }
+static PyObject *caravan_init(PyObject *m, PyObject *loader) {
+  WithCaravanGL(m, gl) {
 
-    printf("CaravanGL: Subinterpreter state initialized.\n");
-    Py_RETURN_NONE;
+    if (load_gl(state, loader) < 0) {
+      return nullptr; // Error already set by load_gl
+    }
+  }
+
+  printf("CaravanGL: Subinterpreter state initialized.\n");
+  Py_RETURN_NONE;
 }
 
 /**
  * caravan.test_render()
  * Proof-of-concept using the inferred 'gl' table.
  */
-static PyObject* caravan_test_render(PyObject* m, [[maybe_unused]] PyObject* args) {
-    auto gl = gl_table(m);
-
-    // 1. Define the color as a vector (spec-pure)
-    const GLfloat clear_color[] = { 0.1f, 0.2f, 0.3f, 1.0f };
-
-    // 2. Replace ClearColor + Clear with one call
-    // GL_COLOR is the 'buffer' type
-    // 0 is the draw buffer index (usually GL_BACK)
+static PyObject *caravan_test_render(PyObject *m,
+                                     [[maybe_unused]] PyObject *args) {
+  WithCaravanGL(m, gl) {
+    const GLfloat clear_color[] = {0.1f, 0.2f, 0.3f, 1.0f};
     gl.ClearBufferfv(GL_COLOR, 0, clear_color);
-    
     GLint v[4];
     gl.GetIntegerv(GL_VIEWPORT, v);
-
-    printf("CaravanGL: Modern ClearBuffer. Viewport: %d %d %d %d\n", v[0], v[1], v[2], v[3]);
-
-    Py_RETURN_NONE;
+  
+  printf("CaravanGL: Modern ClearBuffer. Viewport: %d %d %d %d\n", v[0], v[1],
+         v[2], v[3]);
+  }
+  Py_RETURN_NONE;
 }
 
 // --- Module Method Table ---
 
 static PyMethodDef caravan_methods[] = {
     {"init", (PyCFunction)caravan_init, METH_O, "Initialize OpenGL loader"},
-    {"test_render", (PyCFunction)caravan_test_render, METH_NOARGS, "Test render call"},
-    {nullptr, nullptr, 0, nullptr}
-};
+    {"test_render", (PyCFunction)caravan_test_render, METH_NOARGS,
+     "Test render call"},
+    {nullptr, nullptr, 0, nullptr}};
 
 // --- Multi-phase Initialization Slots (C23) ---
 
-static int caravan_exec(PyObject* m) {
-    auto* state = get_caravan_state(m);
+static int caravan_exec(PyObject *m) {
+  auto *state = get_caravan_state(m);
 
-    // Initialize context state
-    state->ctx = (CaravanContext){
-        .last_error = GL_NO_ERROR,
-        .viewport = {0, 0, 0, 0}
-    };
+  // Initialize context state
+  state->ctx =
+      (CaravanContext){.last_error = GL_NO_ERROR, .viewport = {0, 0, 0, 0}};
 
-    return 0; // Success
+  return 0; // Success
 }
 
-static int caravan_traverse(PyObject* m, visitproc visit, void* arg) {
-    auto* state = get_caravan_state(m);
-    // Add visits here when you add heap types (state->BufferType)
-    return 0;
+static int caravan_traverse(PyObject *m, visitproc visit, void *arg) {
+  auto *state = get_caravan_state(m);
+  // Add visits here when you add heap types (state->BufferType)
+  return 0;
 }
 
-static int caravan_clear(PyObject* m) {
-    // Add clears here for heap types
-    return 0;
+static int caravan_clear(PyObject *m) {
+  // Add clears here for heap types
+  return 0;
 }
 
 // ... inside caravan_slots ...
@@ -82,8 +75,7 @@ static PyModuleDef_Slot caravan_slots[] = {
 #ifdef Py_mod_gil
     {Py_mod_gil, Py_MOD_GIL_NOT_USED}, // Tells 3.14 we are GIL-safe
 #endif
-    {0, nullptr}
-};
+    {0, nullptr}};
 
 static struct PyModuleDef caravan_module = {
     PyModuleDef_HEAD_INIT,
@@ -100,5 +92,5 @@ static struct PyModuleDef caravan_module = {
 // --- Module Entry Point ---
 
 PyMODINIT_FUNC PyInit_caravangl(void) {
-    return PyModuleDef_Init(&caravan_module);
+  return PyModuleDef_Init(&caravan_module);
 }

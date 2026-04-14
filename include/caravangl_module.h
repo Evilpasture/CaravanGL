@@ -29,3 +29,7 @@ static inline CaravanState *get_caravan_state(PyObject *m) {
 static inline CaravanGLTable gl_table(PyObject* m) {
     return get_caravan_state(m)->gl;
 }
+
+#define WithCaravanGL(module_ptr, gl_name) \
+    for (auto state = get_caravan_state(module_ptr); state != nullptr; state = nullptr) \
+        for (auto gl_name = state->gl; state != nullptr; state = nullptr)
