@@ -756,7 +756,7 @@ static PyGetSetDef Pipeline_getset[] = {
 };
 
 static PyMethodDef Pipeline_methods[] = {
-    {"upload_uniforms", (PyCFunction)((void(*)(void)))Pipeline_upload_uniforms, METH_FASTCALL | METH_KEYWORDS, nullptr}
+    {"upload_uniforms", (PyCFunction)(void(*)(void))Pipeline_upload_uniforms, METH_FASTCALL | METH_KEYWORDS, nullptr},
     {"draw", (PyCFunction)(void(*)(void))Pipeline_draw, METH_NOARGS, "Execute the draw call."},
     {}
 };
