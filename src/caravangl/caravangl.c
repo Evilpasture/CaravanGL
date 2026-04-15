@@ -121,9 +121,10 @@ static int Buffer_init(PyCaravanBuffer *self, PyObject *args, PyObject *kwds) {
         const void *ptr = nullptr;
         Py_buffer view;
         if (data && data != Py_None) {
-            // Python 3.14t signature: (view, obj, buf, len, readonly, flags)
-            if (PyBuffer_FillInfo(&view, data, nullptr, 0, 0, PyBUF_SIMPLE) == 0) {
+            if (PyObject_GetBuffer(data, &view, PyBUF_SIMPLE) == 0) {
                 ptr = view.buf;
+            } else {
+                return -1; // Fail initialization if buffer extraction fails
             }
         }
 
@@ -157,7 +158,8 @@ static PyObject* Buffer_write(PyCaravanBuffer *self, PyObject *const *args, Py_s
         }
 
         Py_buffer view;
-        if (data == nullptr || PyBuffer_FillInfo(&view, data, nullptr, 0, 0, PyBUF_SIMPLE) != 0) {
+        if (data == nullptr || PyObject_GetBuffer(data, &view, PyBUF_SIMPLE) != 0) {
+            PyErr_SetString(PyExc_TypeError, "data must support the buffer protocol");
             return nullptr;
         }
 
@@ -332,6 +334,10 @@ static int Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObject *kwds
         static Py_ssize_t stride = sizeof(GLuint);
         self->params_buffer.shape = &shape;
         self->params_buffer.strides = &stride;
+        
+        // FIX: Tie the buffer lifetime to the Pipeline object
+        self->params_buffer.obj = (PyObject *)self;
+        Py_INCREF(self);
         
         self->params_view = PyMemoryView_FromBuffer(&self->params_buffer);
     }
