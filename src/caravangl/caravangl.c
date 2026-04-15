@@ -10,11 +10,12 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include "caravangl_arg_indices.h"
-#include "caravangl_pyspec.h"
 #include "caravangl_loader.h"
+#include "caravangl_pyspec.h"
 #include "fast_build.h"
 #include "pycaravangl.h"
 #include <string.h>
+
 
 // -----------------------------------------------------------------------------
 // Internal Helpers
@@ -199,7 +200,8 @@ PyCaravanGL_API caravan_test_render(PyObject *m, [[maybe_unused]] PyObject *cons
 
 PyCaravanGL_API caravan_enable_debug(PyObject *m, [[maybe_unused]] PyObject *args) {
 #if !defined(__APPLE__)
-    WithCaravanGL(m, gl) {
+    WithCaravanGL(m, gl)
+    {
         if (!gl.DebugMessageCallback) {
             PyErr_SetString(PyExc_RuntimeError, "Debug Output not supported on this driver.");
             return nullptr;
@@ -207,7 +209,7 @@ PyCaravanGL_API caravan_enable_debug(PyObject *m, [[maybe_unused]] PyObject *arg
 
         // 1. Enable debug mode in the driver
         gl.Enable(GL_DEBUG_OUTPUT);
-        
+
         // 2. Force synchronous calls. This blocks the CPU until the callback finishes.
         // It makes performance worse, but gives you highly accurate error call-stacks.
         gl.Enable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
@@ -216,12 +218,13 @@ PyCaravanGL_API caravan_enable_debug(PyObject *m, [[maybe_unused]] PyObject *arg
         gl.DebugMessageCallback(opengl_debug_callback, state);
 
         // 4. Control what messages you want to hear:
-        
+
         // Enable everything by default
         gl.DebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
-        
+
         // Example: Disable "Notification" level spam (like buffer memory placement info)
-        gl.DebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, GL_FALSE);
+        gl.DebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0,
+                               nullptr, GL_FALSE);
 
         // Example: If you wanted to disable specific driver error IDs manually:
         // GLuint skip_ids[] = { 1234, 5678 };
@@ -234,16 +237,15 @@ PyCaravanGL_API caravan_enable_debug(PyObject *m, [[maybe_unused]] PyObject *arg
 #endif
 }
 
-
-
 static PyMethodDef caravan_methods[] = {
     {"init", (PyCFunction)(void (*)(void))caravan_init, METH_FASTCALL | METH_KEYWORDS,
      "Initialize loader"},
+    {"enable_debug", (PyCFunction)caravan_enable_debug, METH_NOARGS, "Enable GL Debug Output"},
     {"context", (PyCFunction)(void (*)(void))caravan_context, METH_NOARGS, "Get capabilities"},
     {"inspect", (PyCFunction)caravan_inspect, METH_O, "Inspect internal C/GL state"},
     {"test_render", (PyCFunction)(void (*)(void))caravan_test_render, METH_FASTCALL | METH_KEYWORDS,
      "Test render"},
-    {nullptr, nullptr, 0, nullptr}};
+    {}};
 
 // -----------------------------------------------------------------------------
 // Module Lifecycle
