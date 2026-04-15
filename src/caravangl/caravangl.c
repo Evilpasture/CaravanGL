@@ -26,16 +26,39 @@
 static void query_capabilities(PyObject *m) {
     WithCaravanGL(m, gl) {
         if (gl.GetIntegerv != nullptr) {
+            // Textures
             gl.GetIntegerv(GL_MAX_TEXTURE_SIZE, &state->ctx.caps.max_texture_size);
-            gl.GetIntegerv(GL_MAX_SAMPLES, &state->ctx.caps.max_samples);
-            gl.GetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &state->ctx.caps.max_uniform_block_size);
+            gl.GetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &state->ctx.caps.max_3d_texture_size);
+            gl.GetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &state->ctx.caps.max_array_texture_layers);
+            gl.GetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &state->ctx.caps.max_texture_units);
             
+            // FBOs & Buffers
+            gl.GetIntegerv(GL_MAX_SAMPLES, &state->ctx.caps.max_samples);
+            gl.GetIntegerv(GL_MAX_COLOR_ATTACHMENTS, &state->ctx.caps.max_color_attachments);
+            gl.GetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &state->ctx.caps.max_uniform_block_size);
+            gl.GetIntegerv(GL_MAX_UNIFORM_BUFFER_BINDINGS, &state->ctx.caps.max_ubo_bindings);
+            
+            // Viewport
             GLint v[4] = {0};
             gl.GetIntegerv(GL_VIEWPORT, v);
             state->ctx.viewport = (CaravanRect){v[0], v[1], v[2], v[3]};
         }
+
+#ifndef __APPLE__
         state->ctx.caps.support_compute = (gl.DispatchCompute != nullptr);
         state->ctx.caps.support_bindless = (gl.GetTextureHandleARB != nullptr);
+        
+        if (state->ctx.caps.support_compute && gl.GetIntegerv != nullptr) {
+            gl.GetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS, &state->ctx.caps.max_compute_work_group_invocations);
+            gl.GetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &state->ctx.caps.max_shader_storage_block_size);
+        }
+#else
+        // Hardcode to false for Mac (OpenGL 4.1 limit)
+        state->ctx.caps.support_compute = false;
+        state->ctx.caps.support_bindless = false;
+        state->ctx.caps.max_compute_work_group_invocations = 0;
+        state->ctx.caps.max_shader_storage_block_size = 0;
+#endif
     }
 }
 

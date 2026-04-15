@@ -81,6 +81,11 @@ typedef struct CaravanRect {
  * Keeps track of currently bound state to avoid redundant GL calls (State
  * Sorting).
  */
+// Define reasonable maximums for your engine's internal arrays
+static constexpr auto CARAVAN_MAX_TEXTURE_UNITS = 32;
+static constexpr auto CARAVAN_MAX_UBO_BINDINGS = 16;
+static constexpr auto CARAVAN_MAX_SSBO_BINDINGS = 16;
+
 typedef struct CaravanContext {
   struct {
     GLuint vao;
@@ -88,18 +93,47 @@ typedef struct CaravanContext {
     GLuint fbo_read;
     GLuint fbo_draw;
 
-    GLuint ubo[GL_MAX_UNIFORM_BUFFER_BINDINGS];
-    GLuint texture_units[GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS];
+    // Track the active texture unit to avoid redundant glActiveTexture calls
+    GLuint active_texture_unit; 
+
+    // Use engine-defined maximums for arrays
+    GLuint ubo[CARAVAN_MAX_UBO_BINDINGS];
+    GLuint ssbo[CARAVAN_MAX_SSBO_BINDINGS];
+    GLuint texture_units[CARAVAN_MAX_TEXTURE_UNITS];
+
+    // Basic Render State Caching (saves performance)
+    bool depth_test_enabled;
+    bool blend_enabled;
+    bool cull_face_enabled;
   } bound;
 
   CaravanRect viewport; 
 
   struct {
+    // Basic limits
     GLint max_texture_size;
+    GLint max_3d_texture_size;
+    GLint max_array_texture_layers;
     GLint max_samples;
+    
+    // Binding limits (queried from hardware)
+    GLint max_texture_units;
+    GLint max_ubo_bindings;
+    
+    // Buffer size limits
     GLint max_uniform_block_size;
+    GLint max_shader_storage_block_size;
+    
+    // FBO limits
+    GLint max_color_attachments;
+
+    // Compute limits
+    GLint max_compute_work_group_invocations;
+
+    // Feature support
     bool support_bindless;
     bool support_compute;
+    bool support_anisotropy;
   } caps;
 
   GLenum last_error;

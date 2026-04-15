@@ -63,19 +63,28 @@ static int load_gl(CaravanState *state, PyObject *loader) {
   GL_FUNCTIONS_3_3_CORE(LOAD_REQUIRED)
 
 // --- 2. OPTIONAL: 4.2, 4.3, 4.4, 4.6 and Extensions ---
-// (Will be NULL on macOS, but populated on modern Linux/Windows)
-#define LOAD_OPTIONAL(ret, func_name, ...)                                     \
-  do {                                                                         \
-    auto *ptr = load_opengl_function(loader_function, "gl" #func_name);        \
-    state->gl.func_name = (typeof(state->gl.func_name))ptr;                    \
-  } while (0);
+#ifndef __APPLE__
+  // Standard behavior for Windows/Linux
+  #define LOAD_OPTIONAL(ret, func_name, ...)                                   \
+    do {                                                                       \
+      auto *ptr = load_opengl_function(loader_function, "gl" #func_name);      \
+      state->gl.func_name = (typeof(state->gl.func_name))ptr;                  \
+    } while (0);
+#else
+  // Mac behavior: Do nothing. 
+  // We don't even try to look up the symbol or assign it.
+  #define LOAD_OPTIONAL(ret, func_name, ...) /* NOP */
+#endif
 
-  GL_FUNCTIONS_4_2_CORE(LOAD_OPTIONAL)
-  GL_FUNCTIONS_4_3_CORE(LOAD_OPTIONAL)
-  GL_FUNCTIONS_4_4_CORE(LOAD_OPTIONAL)
-  GL_FUNCTIONS_4_3_OPTIONAL(LOAD_OPTIONAL)
-  GL_FUNCTIONS_4_6_OPTIONAL(LOAD_OPTIONAL)
-  GL_FUNCTIONS_EXT_BINDLESS(LOAD_OPTIONAL)
+// --- Execution ---
+GL_FUNCTIONS_3_3_CORE(LOAD_REQUIRED)
+
+GL_FUNCTIONS_4_2_CORE(LOAD_OPTIONAL)
+GL_FUNCTIONS_4_3_CORE(LOAD_OPTIONAL)
+GL_FUNCTIONS_4_4_CORE(LOAD_OPTIONAL)
+GL_FUNCTIONS_4_3_OPTIONAL(LOAD_OPTIONAL)
+GL_FUNCTIONS_4_6_OPTIONAL(LOAD_OPTIONAL)
+GL_FUNCTIONS_EXT_BINDLESS(LOAD_OPTIONAL)
 
 #undef LOAD_REQUIRED
 #undef LOAD_OPTIONAL

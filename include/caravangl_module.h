@@ -12,16 +12,23 @@ typedef struct CaravanGLTable {
   #undef GL_PTR_GEN
 
   // 4.2+ gets the "Silly Apple" treatment
-  #define GL_PTR_DEPRECATED(ret, name, ...) \
-    CARAVAN_GL_DEPRECATED("OpenGL 4.2+ is not supported on macOS") \
-    ret(GL_API *name)(__VA_ARGS__);
+  #ifndef __APPLE__
+    // Standard path for Linux/Windows
+    #define GL_PTR_4_2(ret, name, ...) ret(GL_API *name)(__VA_ARGS__);
+  #else
+    // Mac path: Functions exist in the struct (to keep offsets same) 
+    // but are poisoned to cause a compile error if used.
+    #define GL_PTR_4_2(ret, name, ...) \
+      __attribute__((unavailable("OpenGL 4.2+ is not supported on macOS"))) \
+      ret(GL_API *name)(__VA_ARGS__);
+  #endif
 
-  GL_FUNCTIONS_4_2_CORE(GL_PTR_DEPRECATED)
-  GL_FUNCTIONS_4_3_CORE(GL_PTR_DEPRECATED)
-  GL_FUNCTIONS_4_4_CORE(GL_PTR_DEPRECATED)
-  GL_FUNCTIONS_4_3_OPTIONAL(GL_PTR_DEPRECATED)
-  GL_FUNCTIONS_4_6_OPTIONAL(GL_PTR_DEPRECATED)
-  GL_FUNCTIONS_EXT_BINDLESS(GL_PTR_DEPRECATED)
+  GL_FUNCTIONS_4_2_CORE(GL_PTR_4_2)
+  GL_FUNCTIONS_4_3_CORE(GL_PTR_4_2)
+  GL_FUNCTIONS_4_4_CORE(GL_PTR_4_2)
+  GL_FUNCTIONS_4_3_OPTIONAL(GL_PTR_4_2)
+  GL_FUNCTIONS_4_6_OPTIONAL(GL_PTR_4_2)
+  GL_FUNCTIONS_EXT_BINDLESS(GL_PTR_4_2)
   
   #undef GL_PTR_DEPRECATED
 } CaravanGLTable;
