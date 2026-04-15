@@ -225,12 +225,12 @@ static PyType_Spec Buffer_spec = {
  * caravan.init(loader)
  * Loads the function table and discovers GPU capabilities.
  */
-static PyObject *caravan_init(PyObject *m, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames) {
+static PyObject *caravan_init(PyObject *m, PyObject *const *args, Py_ssize_t nargsf, PyObject *kwnames) {
     WithCaravanGL(m, gl) {
         PyObject *loader = nullptr;
         void *targets[Init_COUNT] = { [IDX_INIT_LOADER] = &loader };
 
-        if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.InitParser, targets)) {
+        if (!FastParse_Unified(args, PyVectorcall_NARGS(nargsf), kwnames, &state->parsers.InitParser, targets)) {
             return nullptr;
         }
 
@@ -348,6 +348,11 @@ static PyObject* Pipeline_draw(PyCaravanPipeline *self, PyObject *const *args, P
     PyObject *m = PyType_GetModule(Py_TYPE(self));
     
     WithCaravanGL(m, gl) {
+        // 0. Predictable Early-Out: If vertex or instance count is 0, do nothing.
+        if (self->params.vertex_count == 0 || self->params.instance_count == 0) [[unlikely]] {
+            Py_RETURN_NONE;
+        }
+
         // 1. Lock the context state
         MagMutex_Lock(&state->ctx.state_lock);
 
@@ -366,20 +371,31 @@ static PyObject* Pipeline_draw(PyCaravanPipeline *self, PyObject *const *args, P
         // 4. Dispatch the Draw Call
         if (self->index_type != 0) {
             // Indexed Drawing (glDrawElements)
+            
+            // PREDICTABILITY FIX: Convert 'first_vertex' (element index) into a byte offset
+            uintptr_t byte_offset = 0;
+            switch (self->index_type) {
+                case GL_UNSIGNED_INT:   byte_offset = self->params.first_vertex * sizeof(GLuint);   break;
+                case GL_UNSIGNED_SHORT: byte_offset = self->params.first_vertex * sizeof(GLushort); break;
+                case GL_UNSIGNED_BYTE:  byte_offset = self->params.first_vertex * sizeof(GLubyte);  break;
+            }
+            void *index_ptr = (void *)byte_offset;
+
             if (self->params.instance_count > 1) {
                 gl.DrawElementsInstanced(self->topology, 
                                          self->params.vertex_count, 
                                          self->index_type, 
-                                         (void*)(uintptr_t)(self->params.first_vertex), 
+                                         index_ptr, 
                                          self->params.instance_count);
             } else {
                 gl.DrawElements(self->topology, 
                                 self->params.vertex_count, 
                                 self->index_type, 
-                                (void*)(uintptr_t)(self->params.first_vertex));
+                                index_ptr);
             }
         } else {
             // Array Drawing (glDrawArrays)
+            
             if (self->params.instance_count > 1) {
                 gl.DrawArraysInstanced(self->topology, 
                                        self->params.first_vertex, 
