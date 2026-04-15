@@ -56,5 +56,9 @@
 #include "caravangl_core.h"     // Basic GL Types, Constants, and X-Macros
 #include "caravangl_loader.h"   // Loader implementation (load_gl)
 #include "caravangl_module.h"   // Python State (CaravanState & CaravanGLTable)
+#if defined(CARAVANGL_LOADER_ONLY)
+
+#else
 #include "caravangl_specs.h"    // Engine Structs (Buffers, Context, Textures)
+#endif
 #include "caravangl_uniforms.h" // Uniform dispatch wrappers

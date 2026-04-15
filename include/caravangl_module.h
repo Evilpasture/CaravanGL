@@ -35,6 +35,7 @@ typedef struct CaravanGLTable {
 
 typedef struct CaravanState {
   PyTypeObject *BufferType;
+  PyTypeObject *PipelineType;
   PyObject *CaravanError;
   CaravanContext ctx;
   CaravanGLTable gl;

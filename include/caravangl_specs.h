@@ -1,5 +1,6 @@
 #pragma once
 #include "caravangl_core.h"
+#include "mag_mutex.h"
 
 // -----------------------------------------------------------------------------
 // Core Objects
@@ -76,17 +77,44 @@ typedef struct CaravanRect {
 // Context & State Tracking
 // -----------------------------------------------------------------------------
 
-/**
- * CaravanGLContext: The "Brain" of the renderer.
- * Keeps track of currently bound state to avoid redundant GL calls (State
- * Sorting).
- */
-// Define reasonable maximums for your engine's internal arrays
 static constexpr auto CARAVAN_MAX_TEXTURE_UNITS = 32;
 static constexpr auto CARAVAN_MAX_UBO_BINDINGS = 16;
 static constexpr auto CARAVAN_MAX_SSBO_BINDINGS = 16;
 
+// Struct to track bounded buffer ranges (UBOs/SSBOs)
+typedef struct CaravanBufferBinding {
+    GLuint id;
+    GLintptr offset;
+    GLsizeiptr size;
+} CaravanBufferBinding;
+
+// Struct to track bound textures per unit
+typedef struct CaravanTextureBinding {
+    GLuint target;
+    GLuint id;
+    GLuint sampler_id;
+} CaravanTextureBinding;
+
+// Struct to track render pipeline state
+typedef struct CaravanRenderState {
+    bool cull_face_enabled;
+    GLenum cull_face_mode;
+
+    bool depth_test_enabled;
+    GLenum depth_func;
+    bool depth_write_mask;
+
+    bool blend_enabled;
+    GLenum blend_src_rgb, blend_dst_rgb;
+    GLenum blend_src_alpha, blend_dst_alpha;
+    GLenum blend_eq_rgb, blend_eq_alpha;
+
+    // Expand with Stencil state here as needed...
+} CaravanRenderState;
+
+
 typedef struct CaravanContext {
+  MagMutex state_lock;
   struct {
     GLuint vao;
     GLuint program;
@@ -97,9 +125,12 @@ typedef struct CaravanContext {
     GLuint active_texture_unit; 
 
     // Use engine-defined maximums for arrays
-    GLuint ubo[CARAVAN_MAX_UBO_BINDINGS];
-    GLuint ssbo[CARAVAN_MAX_SSBO_BINDINGS];
-    GLuint texture_units[CARAVAN_MAX_TEXTURE_UNITS];
+    CaravanBufferBinding ubo[CARAVAN_MAX_UBO_BINDINGS];
+    CaravanBufferBinding ssbo[CARAVAN_MAX_SSBO_BINDINGS];
+    CaravanTextureBinding texture_units[CARAVAN_MAX_TEXTURE_UNITS];
+
+    CaravanRenderState render;
+    GLsync last_work_fence; // For GPU/CPU sync
 
     // Basic Render State Caching (saves performance)
     bool depth_test_enabled;
@@ -173,3 +204,11 @@ typedef struct CaravanMesh {
   GLenum mode;       // GL_TRIANGLES, GL_LINES, etc.
   GLenum index_type; // GL_UNSIGNED_INT or GL_UNSIGNED_SHORT
 } CaravanMesh;
+
+// Draw parameters that can be mutated via MemoryView without Python overhead
+typedef struct CaravanDrawParams {
+    GLuint vertex_count;
+    GLuint instance_count;
+    GLuint first_vertex;
+    GLuint base_instance;
+} CaravanDrawParams;

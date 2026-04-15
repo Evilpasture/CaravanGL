@@ -22,6 +22,17 @@
 #define SCHEMA_BUF_BIND(X) \
     X(IDX_BUF_BIND_IDX, "index", uint32_t, 1)
 
+#define SCHEMA_PIPELINE_INIT(X) \
+    X(IDX_PL_PROGRAM, "program",    uint32_t, 1) \
+    X(IDX_PL_VAO,     "vao",        uint32_t, 1) \
+    X(IDX_PL_TOPO,    "topology",   uint32_t, 0) \
+    X(IDX_PL_IDX_TYP, "index_type", uint32_t, 0) \
+    X(IDX_PL_DEPTH,   "depth_test", int,      0) \
+    X(IDX_PL_DWRITE,  "depth_write",int,      0) \
+    X(IDX_PL_DFUNC,   "depth_func", uint32_t, 0) \
+    X(IDX_PL_BLEND,   "blend",      int,      0) \
+    X(IDX_PL_CULL,    "cull",       int,      0)
+
 /** --- THE GENERATOR ENGINE --- **/
 
 #define GEN_ENUM(ID, NAME, TYPE, REQ) ID,
@@ -35,13 +46,16 @@ DEFINE_INDEX_GROUP(Init,     SCHEMA_INIT)
 DEFINE_INDEX_GROUP(BufInit,  SCHEMA_BUF_INIT)
 DEFINE_INDEX_GROUP(BufWrite, SCHEMA_BUF_WRITE)
 DEFINE_INDEX_GROUP(BufBind,  SCHEMA_BUF_BIND)
+DEFINE_INDEX_GROUP(PipelineInit, SCHEMA_PIPELINE_INIT)
 
 // Master list of all parsers
 #define FOR_ALL_PARSERS(X) \
     X(Init,     Init,     SCHEMA_INIT) \
     X(BufInit,  BufInit,  SCHEMA_BUF_INIT) \
     X(BufWrite, BufWrite, SCHEMA_BUF_WRITE) \
-    X(BufBind,  BufBind,  SCHEMA_BUF_BIND)
+    X(BufBind,  BufBind,  SCHEMA_BUF_BIND) \
+    X(PipelineInit, PipelineInit, SCHEMA_PIPELINE_INIT)
+
 
 // Macro to declare the struct members
 #define MAP_TO_DECLARE(ParserName, GroupName, Schema) \
