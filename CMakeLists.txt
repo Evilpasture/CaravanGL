@@ -9,6 +9,7 @@ find_package(Python REQUIRED COMPONENTS Development.Module)
 
 # 1. Add the submodule directory
 add_subdirectory(extern/fast-capi)
+add_subdirectory(extern/mag-mutex)
 
 # 2. Define your main Python module 
 # ADDED: caravangl_arg_indices.c must be here!
@@ -21,6 +22,7 @@ add_library(caravangl MODULE
 target_link_libraries(caravangl PRIVATE 
     Python::Module
     fast_capi_core
+    mag_mutex_lib
 )
 
 target_include_directories(caravangl PRIVATE include)
