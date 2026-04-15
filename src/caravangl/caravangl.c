@@ -175,7 +175,25 @@ PyCaravanGL_API caravan_inspect(PyObject *m, PyObject *arg) {
         return FastBuild_Dict("type", "vertex_array", "id", (long long)v->id);
     }
 
-    // TODO: Add Texture / Framebuffer / Compute inspections here as you build them.
+    // ADDED: Texture Inspection
+    if (type == state->TextureType) {
+        PyCaravanTexture *t = (PyCaravanTexture *)arg;
+        return FastBuild_Dict("type", "texture", 
+                              "id", (long long)t->tex.id, 
+                              "target", (long long)t->tex.target,
+                              "width", (long long)t->tex.width,
+                              "height", (long long)t->tex.height,
+                              "internal_format", (long long)t->tex.internal_format);
+    }
+
+    // ADDED: UniformBatch Inspection (good for coverage)
+    if (type == state->UniformBatchType) {
+        PyCaravanUniformBatch *ub = (PyCaravanUniformBatch *)arg;
+        return FastBuild_Dict("type", "uniform_batch", 
+                              "count", (long long)ub->header->count,
+                              "bytes_used", (long long)ub->current_payload_offset,
+                              "max_bytes", (long long)ub->max_payload_bytes);
+    }
 
     // If we don't recognize the object, return None natively.
     Py_RETURN_NONE;
@@ -207,7 +225,7 @@ PyCaravanGL_API caravan_clear_color(PyObject *m, PyObject *const *args, Py_ssize
         if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.ClearColorParser, targets))
             return nullptr;
 
-        const GLfloat color[] = {0.1f, 0.1f, 0.1f, 1.0f};
+        const GLfloat color[] = {r, g, b, a};
         gl.ClearBufferfv(GL_COLOR, 0, color);
     }
     Py_RETURN_NONE;
@@ -380,6 +398,8 @@ PyCaravanGL_Status caravan_traverse(PyObject *m, visitproc visit, void *arg) {
         Py_VISIT(state->PipelineType);
         Py_VISIT(state->ProgramType);
         Py_VISIT(state->VertexArrayType);
+        Py_VISIT(state->UniformBatchType);
+        Py_VISIT(state->TextureType);
     }
     return 0;
 }
@@ -392,6 +412,8 @@ PyCaravanGL_Status py_caravan_clear(PyObject *m) {
         Py_CLEAR(state->PipelineType);
         Py_CLEAR(state->ProgramType);
         Py_CLEAR(state->VertexArrayType);
+        Py_CLEAR(state->UniformBatchType);
+        Py_CLEAR(state->TextureType);
     }
     return 0;
 }

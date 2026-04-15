@@ -101,7 +101,7 @@ PyCaravanGL_API Texture_bind(PyCaravanTexture *self, PyObject *const *args, Py_s
 
         if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.TexBindParser, targets)) return nullptr;
         
-        // Assuming Sampler Object is 0 for now until Sampler objects are added
+        // TODO: Assuming Sampler Object is 0 for now until Sampler objects are added
         cv_bind_texture(state, unit, self->tex.target, self->tex.id, 0);
     }
     Py_RETURN_NONE;

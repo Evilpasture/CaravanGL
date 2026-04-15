@@ -56,7 +56,7 @@
     X(IDX_UB_ADD_CNT, "count", int, 1)                                                             \
     X(IDX_UB_ADD_SIZE, "size", int, 1) // Bytes required for this uniform
 
-#define SCHEMA_TEX_INIT(X) X(IDX_TEX_TARGET, "target", uint32_t, 1)
+#define SCHEMA_TEX_INIT(X) X(IDX_TEX_TARGET, "target", uint32_t, 0)
 
 #define SCHEMA_TEX_UPLOAD(X)                                                                       \
     X(IDX_TEX_UPL_LEVEL, "level", int, 0)                                                          \

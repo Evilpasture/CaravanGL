@@ -78,13 +78,13 @@ pipeline = caravangl.Pipeline(
 
 # Mutate the memoryview to set vertex count to 3
 pipeline.params[0] = 3
-
+GL_COLOR_BUFFER_BIT = 0x00004000
 # 7. Main Render Loop
 while not glfw.window_should_close(window):
     glfw.poll_events()
     
-    # Optional: Clear the screen (we use our test_render helper)
-    caravangl.test_render()
+    caravangl.clear_color(0, 0, 0, 1)
+    caravangl.clear(GL_COLOR_BUFFER_BIT)
     
     # THE DRAW CALL
     pipeline.draw()
