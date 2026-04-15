@@ -13,6 +13,23 @@ GL_UNIFORM_BUFFER = 0x8A11
 GL_STATIC_DRAW = 0x88E4
 GL_TRIANGLES = 0x0004
 GL_UNSIGNED_INT = 0x1405
+GL_FLOAT = 0x1406
+
+# --- Dummy Shaders for Testing ---
+VS_DUMMY = """
+#version 330 core
+void main() {
+    gl_Position = vec4(0.0, 0.0, 0.0, 1.0);
+}
+"""
+
+FS_DUMMY = """
+#version 330 core
+out vec4 FragColor;
+void main() {
+    FragColor = vec4(1.0);
+}
+"""
 
 
 class GLLoader:
@@ -64,7 +81,7 @@ def gl_context():
     glfw.terminate()
 
 
-def test_context_capabilities(gl_context): # Pass the fixture to access the window
+def test_context_capabilities(gl_context): 
     """Test that capabilities were correctly queried and populated."""
     ctx = caravangl.context()
     
@@ -84,7 +101,6 @@ def test_context_capabilities(gl_context): # Pass the fixture to access the wind
 def test_buffer_creation_and_inspect():
     """Test creating an empty buffer and inspecting its internal C state."""
     buf = caravangl.Buffer(size=1024, target=GL_ARRAY_BUFFER, usage=GL_STATIC_DRAW)
-    
     info = caravangl.inspect(buf)
     
     assert info["type"] == "buffer"
@@ -123,21 +139,30 @@ def test_buffer_write_bounds():
         buf.write(12345, offset=0)
 
 
-def test_buffer_bind_base():
-    """Test binding to an indexed target."""
-    buf = caravangl.Buffer(size=256, target=GL_UNIFORM_BUFFER)
-    # Shouldn't crash. (Testing actual GL state binding would require feedback shaders)
-    buf.bind_base(index=0)
+def test_program_and_vao():
+    """Test shader compilation and VAO generation."""
+    prog = caravangl.Program(vertex_shader=VS_DUMMY, fragment_shader=FS_DUMMY)
+    vao = caravangl.VertexArray()
+    
+    p_info = caravangl.inspect(prog)
+    v_info = caravangl.inspect(vao)
+    
+    assert p_info["type"] == "program"
+    assert p_info["id"] > 0
+    
+    assert v_info["type"] == "vertex_array"
+    assert v_info["id"] > 0
 
 
 def test_pipeline_creation_and_inspect():
-    """Test pipeline initialization and internal representation."""
-    # Assuming Program ID 1 and VAO ID 1 exist (OpenGL won't strictly validate IDs 
-    # until draw time or state compilation, so this is safe to test)
+    """Test pipeline initialization using true Objects."""
+    prog = caravangl.Program(vertex_shader=VS_DUMMY, fragment_shader=FS_DUMMY)
+    vao = caravangl.VertexArray()
+
     pipe = caravangl.Pipeline(
-        program=1, 
-        vao=1, 
-        topology=GL_TRIANGLES, 
+        program=prog, 
+        vao=vao, 
+        topology=caravangl.TRIANGLES, 
         index_type=GL_UNSIGNED_INT,
         depth_test=1
     )
@@ -145,16 +170,19 @@ def test_pipeline_creation_and_inspect():
     info = caravangl.inspect(pipe)
     
     assert info["type"] == "pipeline"
-    assert info["program"] == 1
-    assert info["vao"] == 1
-    assert info["topology"] == GL_TRIANGLES
+    # The pipeline should have extracted the internal IDs
+    assert info["program"] == caravangl.inspect(prog)["id"]
+    assert info["vao"] == caravangl.inspect(vao)["id"]
+    assert info["topology"] == caravangl.TRIANGLES
     assert info["index_type"] == GL_UNSIGNED_INT
     assert info["render_state"]["depth_test"] is True
 
 
 def test_pipeline_memoryview_mutation():
     """Test the zero-overhead memoryview mutation of draw parameters."""
-    pipe = caravangl.Pipeline(program=1, vao=1)
+    prog = caravangl.Program(vertex_shader=VS_DUMMY, fragment_shader=FS_DUMMY)
+    vao = caravangl.VertexArray()
+    pipe = caravangl.Pipeline(program=prog, vao=vao)
     
     # Get the memory view
     params = pipe.params
@@ -167,4 +195,29 @@ def test_pipeline_memoryview_mutation():
     assert params[1] == 1
     
     # Mutate parameters directly through the view
-    params[0] = 36  # Set vertex_c
+    params[0] = 36  # Set vertex_count to 36
+    params[2] = 12  # Set first_vertex to 12
+    
+    # Inspect the internal C struct to prove the memoryview actually modified it
+    info = caravangl.inspect(pipe)
+    assert info["draw_params"]["vertex_count"] == 36
+    assert info["draw_params"]["first_vertex"] == 12
+
+
+def test_pipeline_draw_predictability():
+    """
+    Test the predictability early-out logic.
+    If vertex_count or instance_count is 0, it should safely return without
+    doing any work.
+    """
+    prog = caravangl.Program(vertex_shader=VS_DUMMY, fragment_shader=FS_DUMMY)
+    vao = caravangl.VertexArray()
+    pipe = caravangl.Pipeline(program=prog, vao=vao)
+    
+    # vertex_count is 0 by default. This should early-out safely.
+    pipe.draw()
+    
+    # Change vertex count to >0, but instance_count to 0. Should also early-out.
+    pipe.params[0] = 6
+    pipe.params[1] = 0
+    pipe.draw()
