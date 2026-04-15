@@ -191,7 +191,7 @@ PyCaravanGL_API caravan_inspect(PyObject *m, PyObject *arg) {
         PyCaravanUniformBatch *ub = (PyCaravanUniformBatch *)arg;
         return FastBuild_Dict("type", "uniform_batch", 
                               "count", (long long)ub->header->count,
-                              "bytes_used", (long long)ub->current_payload_offset,
+                              "used_bytes", (long long)ub->current_payload_offset,
                               "max_bytes", (long long)ub->max_payload_bytes);
     }
 

@@ -59,14 +59,14 @@
 #define SCHEMA_TEX_INIT(X) X(IDX_TEX_TARGET, "target", uint32_t, 0)
 
 #define SCHEMA_TEX_UPLOAD(X)                                                                       \
-    X(IDX_TEX_UPL_LEVEL, "level", int, 0)                                                          \
     X(IDX_TEX_UPL_W, "width", int, 1)                                                              \
     X(IDX_TEX_UPL_H, "height", int, 1)                                                             \
-    X(IDX_TEX_UPL_D, "depth", int, 0)                                                              \
     X(IDX_TEX_UPL_IFMT, "internal_format", uint32_t, 1)                                            \
     X(IDX_TEX_UPL_FMT, "format", uint32_t, 1)                                                      \
     X(IDX_TEX_UPL_TYPE, "type", uint32_t, 1)                                                       \
-    X(IDX_TEX_UPL_DATA, "data", PyObject *, 0)
+    X(IDX_TEX_UPL_DATA, "data", PyObject *, 0)                                                     \
+    X(IDX_TEX_UPL_LEVEL, "level", int, 0)                                                          \
+    X(IDX_TEX_UPL_D, "depth", int, 0)
 
 #define SCHEMA_TEX_BIND(X) X(IDX_TEX_BIND_UNIT, "unit", uint32_t, 1)
 
@@ -127,6 +127,7 @@ DEFINE_INDEX_GROUP(ClearColor, SCHEMA_CLEAR_COLOR)
     FastArgSpec ParserName##Specs[GroupName##_COUNT];
 
 typedef struct CaravanParsers {
+    [[gnu::aligned(128)]]
     FOR_ALL_PARSERS(MAP_TO_DECLARE)
     size_t registry_count;
 } CaravanParsers;

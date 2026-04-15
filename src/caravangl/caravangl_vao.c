@@ -63,10 +63,26 @@ PyCaravanGL_API VertexArray_bind_attribute(PyCaravanVertexArray *self, PyObject 
     Py_RETURN_NONE;
 }
 
+PyCaravanGL_API VertexArray_bind_index_buffer(PyCaravanVertexArray *self, PyObject *arg) {
+    PyObject *m = PyType_GetModule(Py_TYPE(self));
+    WithCaravanGL(m, gl) {
+        if (Py_TYPE(arg) != state->BufferType) {
+            PyErr_SetString(PyExc_TypeError, "Expected a caravangl.Buffer");
+            return nullptr;
+        }
+        PyCaravanBuffer *buf = (PyCaravanBuffer *)arg;
+        gl.BindVertexArray(self->id);
+        gl.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, buf->buf.id);
+        gl.BindVertexArray(0);
+    }
+    Py_RETURN_NONE;
+}
+
 static PyMethodDef VertexArray_methods[] = {
     {"bind_attribute", (PyCFunction)(void (*)(void))VertexArray_bind_attribute,
      METH_FASTCALL | METH_KEYWORDS, "Map a VBO to a shader attribute"},
-    {nullptr}};
+     {"bind_index_buffer", (PyCFunction)(void (*)(void))VertexArray_bind_index_buffer, METH_O, nullptr},
+    {}};
 
 static PyType_Slot VertexArray_slots[] = {{Py_tp_init, VertexArray_init},
                                           {Py_tp_dealloc, VertexArray_dealloc},

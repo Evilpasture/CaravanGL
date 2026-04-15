@@ -238,3 +238,149 @@ def test_inspect_coverage():
                               "height", (long long)t->tex.height);
     }
 """
+
+# --- Supplemental Constants ---
+GL_STATIC_DRAW = 0x88E4
+GL_DYNAMIC_DRAW = 0x88E8
+GL_ELEMENT_ARRAY_BUFFER = 0x8893
+GL_UNSIGNED_SHORT = 0x1403
+GL_UNIFORM_BUFFER = 0x8A11
+
+# --- 8. UniformBatch: Zero-Copy Mechanics ---
+
+def test_uniform_batch_zero_copy():
+    """Verify that we can write to UniformBatch memory and upload to a pipeline."""
+    # 1. Create a batch (max 10 bindings, 1024 bytes)
+    batch = caravangl.UniformBatch(max_bindings=10, max_bytes=1024)
+    
+    # 2. Register a vec3 (UF_3F = 3 floats = 12 bytes)
+    # Assume UF_3F is defined in caravangl constants
+    offset = batch.add(func_id=caravangl.UF_3F, location=0, count=1, size=12)
+    assert offset == 0
+    
+    # 3. Write data directly via memoryview
+    # Use struct to pack floats into bytes
+    mv = batch.data
+    struct.pack_into("fff", mv, offset, 1.0, 0.5, 0.2)
+    
+    # 4. Verification via inspection
+    info = caravangl.inspect(batch)
+    assert info["used_bytes"] == 12
+    assert info["count"] == 1
+
+# --- 9. Buffer: Writing and Multi-Targeting ---
+
+def test_buffer_subdata_update():
+    """Verify Buffer.write updates specific regions."""
+    # Create an empty 1KB buffer
+    vbo = caravangl.Buffer(size=1024, usage=GL_DYNAMIC_DRAW)
+    
+    # Write to the middle of the buffer
+    new_data = np.array([9.0, 8.0, 7.0], dtype=np.float32)
+    vbo.write(data=new_data.tobytes(), offset=512)
+    
+    info = caravangl.inspect(vbo)
+    assert info["size"] == 1024
+    assert info["usage"] == GL_DYNAMIC_DRAW
+
+def test_buffer_indexed_binding():
+    """Verify buffer can bind to indexed targets like UBOs."""
+    ubo = caravangl.Buffer(size=256, target=GL_UNIFORM_BUFFER)
+    # Bind to UBO slot 0
+    ubo.bind_base(index=0)
+
+# --- 10. Integration: Indexed Drawing (IBO) ---
+
+def test_indexed_pipeline_draw():
+    """Test glDrawElements path via Pipeline."""
+    prog = caravangl.Program(vertex_shader=VS_DUMMY, fragment_shader=FS_DUMMY)
+    vao = caravangl.VertexArray()
+    
+    # Setup VBO (Points)
+    verts = np.array([0,0,0, 1,0,0, 1,1,0], dtype=np.float32)
+    vbo = caravangl.Buffer(size=verts.nbytes, data=verts.tobytes())
+    vao.bind_attribute(0, vbo, 3, caravangl.FLOAT, 0, 12, 0)
+    
+    # Setup IBO (Indices)
+    indices = np.array([0, 1, 2], dtype=np.uint16)
+    ibo = caravangl.Buffer(size=indices.nbytes, data=indices.tobytes(), target=GL_ELEMENT_ARRAY_BUFFER)
+    # In GL Core, IBO is part of VAO state. 
+    # Our VertexArray doesn't have a specific 'bind_index_buffer' method, 
+    # but binding it while the VAO is active works:
+    # (Note: You might want to add VertexArray.set_index_buffer(buf) to your C API)
+    
+    pipe = caravangl.Pipeline(
+        program=prog, vao=vao, 
+        topology=caravangl.TRIANGLES,
+        index_type=GL_UNSIGNED_SHORT
+    )
+    
+    # Set indices count
+    pipe.params[0] = 3 # vertex_count (indices count in this case)
+    pipe.draw()
+
+# --- 11. Robustness: Argument Validation ---
+
+def test_parser_type_safety():
+    """Verify that FastParse catches invalid types before hitting C logic."""
+    with pytest.raises(TypeError) as excinfo:
+        # Pass a list where an integer (size) is expected
+        caravangl.Buffer(size=[1, 2, 3])
+    assert "int" in str(excinfo.value)
+
+    with pytest.raises(TypeError) as excinfo:
+        # Pass a Buffer where a Program is expected
+        vao = caravangl.VertexArray()
+        vbo = caravangl.Buffer(size=10)
+        caravangl.Pipeline(program=vbo, vao=vao)
+    assert "caravangl.Program" in str(excinfo.value) or "Pipeline" in str(excinfo.value)
+
+# --- 12. Context Metadata & Caps ---
+
+def test_context_capabilities():
+    """Verify context() returns driver info and hardware limits."""
+    ctx = caravangl.context()
+    
+    assert "info" in ctx
+    assert "vendor" in ctx["info"]
+    assert "renderer" in ctx["info"]
+    
+    assert "caps" in ctx
+    assert ctx["caps"]["max_texture_size"] > 0
+    # On Mac, this was hardcoded to false in your C code, check for consistency
+    if sys.platform == "darwin":
+        assert ctx["caps"]["support_compute"] is False
+    
+    assert "viewport" in ctx
+    assert len(ctx["viewport"]) == 4
+
+# --- 13. Isolated Multi-Object Cleanup ---
+
+def test_bulk_resource_deletion():
+    """Ensure heavy churn of objects doesn't leak or crash."""
+    for _ in range(100):
+        b = caravangl.Buffer(size=1024)
+        v = caravangl.VertexArray()
+        # Resources are deleted when Python objects go out of scope/GC
+    
+    # Check context is still healthy
+    caravangl.clear(GL_COLOR_BUFFER_BIT)
+
+# --- 14. Program Uniform Reflection ---
+
+def test_program_uniform_query():
+    """Test getting uniform locations."""
+    # Shader with a named uniform
+    fs_uniform = """
+    #version 330 core
+    uniform vec4 uColor;
+    out vec4 FragColor;
+    void main() { FragColor = uColor; }
+    """
+    prog = caravangl.Program(vertex_shader=VS_DUMMY, fragment_shader=fs_uniform)
+    
+    loc = prog.get_uniform_location("uColor")
+    assert loc >= 0
+    
+    loc_missing = prog.get_uniform_location("nonExistent")
+    assert loc_missing == -1

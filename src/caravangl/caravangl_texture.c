@@ -123,7 +123,7 @@ static PyMethodDef Texture_methods[] = {
     {nullptr}
 };
 
-PyType_Slot Texture_slots[] = {
+static PyType_Slot Texture_slots[] = {
     {Py_tp_init, Texture_init},
     {Py_tp_dealloc, Texture_dealloc},
     {Py_tp_methods, Texture_methods},

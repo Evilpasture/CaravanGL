@@ -1,0 +1,46 @@
+---
+# CaravanGL Static Analysis Configuration
+# Targeted for C23 + Python 3.14t High-Performance Extension
+
+Checks: >
+  -*,
+  bugprone-*,
+  clang-analyzer-*,
+  performance-*,
+  readability-*,
+  modernize-use-nullptr,
+  modernize-use-bool-literals,
+  cert-dcl16-c,
+  cert-exp42-c,
+  cert-flp30-c,
+  cert-str34-c,
+  -readability-identifier-naming,
+  -readability-braces-around-statements,
+  -readability-function-size,
+  -readability-redundant-declaration,
+  -bugprone-reserved-identifier,
+  -bugprone-macro-parentheses,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferPointer,
+
+WarningsAsErrors: 'bugprone-*,performance-*,clang-analyzer-*'
+
+CheckOptions:
+  # Python headers use macros that often trigger naming warnings.
+  # We disable strict naming to accommodate PyObject_HEAD and tp_ slots.
+  readability-identifier-naming.VariableCase: lower_case
+  readability-identifier-naming.FunctionCase: lower_case
+  
+  # Optimization: Allow always_inline for the hot-path draw loops
+  performance-no-int-to-ptr.IgnoreDirectories: 'Python'
+
+  # Modern C23 Preferences
+  modernize-use-nullptr.NullMacros: 'NULL,nullptr'
+
+# Configuration for specific checks
+AnalyzeTemporaryDestructors: false
+
+# High-Performance Graphics specific suppressions
+# We allow bitwise operations on signed integers in some cases because 
+# OpenGL constants are sometimes defined as signed ints in legacy headers.
+# We also allow C-style casts because the Python C API is built on them.
+---
