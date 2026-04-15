@@ -20,6 +20,7 @@ python_add_library(caravangl MODULE
     src/caravangl/caravangl_uniformbatch.c
     src/caravangl/caravangl_program.c
     src/caravangl/caravangl_vao.c
+    src/caravangl/caravangl_texture.c
 )
 
 # 3. Link the submodule and Python

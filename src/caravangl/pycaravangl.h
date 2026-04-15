@@ -11,6 +11,11 @@ typedef struct {
     PyObject *weakreflist; // Support for weak references
 } PyCaravanBuffer;
 
+typedef struct {
+    PyObject_HEAD
+    CaravanTexture tex;
+} PyCaravanTexture;
+
 typedef struct PyCaravanPipeline {
     PyObject_HEAD
 

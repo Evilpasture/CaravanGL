@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * CaravanGL - Final Implementation
+ * CaravanGL
  * ============================================================================
  * Architecture: C23 + Python 3.14t (Free-Threaded)
  * Features: Isolated State, Fast-Path Parsing, Register-Speed Build, No-GIL.
@@ -15,7 +15,6 @@
 #include "fast_build.h"
 #include "pycaravangl.h"
 #include <string.h>
-
 
 // -----------------------------------------------------------------------------
 // Internal Helpers
@@ -42,7 +41,7 @@ static void query_capabilities(PyObject *m) {
             gl.GetIntegerv(GL_MAX_UNIFORM_BUFFER_BINDINGS, &state->ctx.caps.max_ubo_bindings);
 
             // Viewport
-            GLint v[4] = {0};
+            GLint v[4] = {};
             gl.GetIntegerv(GL_VIEWPORT, v);
             state->ctx.viewport = (CaravanRect){.x = v[0], .y = v[1], .w = v[2], .h = v[3]};
         }
@@ -182,20 +181,36 @@ PyCaravanGL_API caravan_inspect(PyObject *m, PyObject *arg) {
     Py_RETURN_NONE;
 }
 
-PyCaravanGL_API caravan_test_render(PyObject *m, [[maybe_unused]] PyObject *const *args,
-                                    [[maybe_unused]] Py_ssize_t nargs,
-                                    [[maybe_unused]] PyObject *kwnames) {
+PyCaravanGL_API caravan_clear(PyObject *m, PyObject *const *args, Py_ssize_t nargs,
+                              PyObject *kwnames) {
     WithCaravanGL(m, gl)
     {
-        if (gl.ClearBufferfv == nullptr) {
-            PyErr_SetString(PyExc_RuntimeError, "GL not initialized");
+        uint32_t mask = 0;
+        void *targets[Clear_COUNT] = {[IDX_CLR_MASK] = &mask};
+
+        if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.ClearParser, targets))
             return nullptr;
-        }
-        const GLfloat clear_color[] = {0.1f, 0.2f, 0.3f, 1.0f};
-        gl.ClearBufferfv(GL_COLOR, 0, clear_color);
-        Py_RETURN_NONE;
+
+        gl.Clear(mask);
     }
-    return nullptr;
+    Py_RETURN_NONE;
+}
+
+PyCaravanGL_API caravan_clear_color(PyObject *m, PyObject *const *args, Py_ssize_t nargs,
+                                    PyObject *kwnames) {
+    WithCaravanGL(m, gl)
+    {
+        float r = 0.0f, g = 0.0f, b = 0.0f, a = 1.0f;
+        void *targets[ClearColor_COUNT] = {
+            [IDX_CLR_C_R] = &r, [IDX_CLR_C_G] = &g, [IDX_CLR_C_B] = &b, [IDX_CLR_C_A] = &a};
+
+        if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.ClearColorParser, targets))
+            return nullptr;
+
+        const GLfloat color[] = {0.1f, 0.1f, 0.1f, 1.0f};
+        gl.ClearBufferfv(GL_COLOR, 0, color);
+    }
+    Py_RETURN_NONE;
 }
 
 PyCaravanGL_API caravan_enable_debug(PyObject *m, [[maybe_unused]] PyObject *args) {
@@ -243,8 +258,10 @@ static PyMethodDef caravan_methods[] = {
     {"enable_debug", (PyCFunction)caravan_enable_debug, METH_NOARGS, "Enable GL Debug Output"},
     {"context", (PyCFunction)(void (*)(void))caravan_context, METH_NOARGS, "Get capabilities"},
     {"inspect", (PyCFunction)caravan_inspect, METH_O, "Inspect internal C/GL state"},
-    {"test_render", (PyCFunction)(void (*)(void))caravan_test_render, METH_FASTCALL | METH_KEYWORDS,
-     "Test render"},
+    {"clear", (PyCFunction)(void (*)(void))caravan_clear, METH_FASTCALL | METH_KEYWORDS,
+     "Clear buffers (e.g. COLOR_BUFFER_BIT)"},
+    {"clear_color", (PyCFunction)(void (*)(void))caravan_clear_color, METH_FASTCALL | METH_KEYWORDS,
+     "Set clear color"},
     {}};
 
 // -----------------------------------------------------------------------------
@@ -266,6 +283,7 @@ static int init_types(PyObject *m, CaravanState *state) {
         {&Program_spec, (PyObject **)&state->ProgramType, "Program"},
         {&VertexArray_spec, (PyObject **)&state->VertexArrayType, "VertexArray"},
         {&UniformBatch_spec, (PyObject **)&state->UniformBatchType, "UniformBatch"},
+        {&Texture_spec, (PyObject **)&state->TextureType, "Texture"},
     };
 
     auto mod_name = PyUnicode_FromString("caravangl");
@@ -366,7 +384,7 @@ PyCaravanGL_Status caravan_traverse(PyObject *m, visitproc visit, void *arg) {
     return 0;
 }
 
-PyCaravanGL_Status caravan_clear(PyObject *m) {
+PyCaravanGL_Status py_caravan_clear(PyObject *m) {
     CaravanState *state = get_caravan_state(m);
     if (state) {
         caravan_free_parsers(&state->parsers);
@@ -394,7 +412,7 @@ static struct PyModuleDef caravan_module = {
     .m_methods = caravan_methods,
     .m_slots = caravan_slots,
     .m_traverse = caravan_traverse,
-    .m_clear = caravan_clear,
+    .m_clear = py_caravan_clear,
     .m_free = nullptr,
 };
 

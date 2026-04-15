@@ -2,9 +2,7 @@
 #include <Python.h>
 #include "caravangl_specs.h"
 
-#if __has_include("caravangl_arg_indices.h")
 #include "caravangl_arg_indices.h"
-#endif
 
 typedef struct CaravanGLTable {
 // 3.3 is safe on Mac
@@ -43,12 +41,11 @@ typedef struct CaravanState {
     PyTypeObject *ProgramType;
     PyTypeObject *VertexArrayType;
     PyTypeObject *UniformBatchType;
+    PyTypeObject *TextureType; 
     PyObject *CaravanError;
     CaravanContext ctx;
     CaravanGLTable gl;
-#if __has_include("caravangl_arg_indices.h")
     CaravanParsers parsers;
-#endif
 } CaravanState;
 
 [[maybe_unused]]
