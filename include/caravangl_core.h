@@ -27,6 +27,7 @@ typedef int64_t GLint64;
 typedef uint64_t GLuint64;
 typedef intptr_t GLintptr;
 typedef ptrdiff_t GLsizeiptr;
+typedef uint16_t GLhalf;
 
 typedef struct __GLsync *GLsync;
 
@@ -974,6 +975,22 @@ typedef enum ImageFormatTupleIndex : uint8_t {
   IF_TUPLE_SIZE
 } ImageFormatTupleIndex;
 
+#ifdef _WIN32
+#define GL_API __stdcall
+#else
+#define GL_API
+#endif
+
+typedef void (GL_API *GLDEBUGPROC)(
+    GLenum source,     // Where the error came from (API, Window System, etc.)
+    GLenum type,       // Error, Performance warning, Portability, etc.
+    GLuint id,         // Driver-specific ID for this message
+    GLenum severity,   // High, Medium, Low, Notification
+    GLsizei length,    // Length of the message string
+    const GLchar* message, // The actual human-readable string
+    const void* userParam  // The pointer you passed in DebugMessageCallback
+);
+
 // -----------------------------------------------------------------------------
 // OpenGL Single Source of Truth Lists (X-Macros)  (unchanged from original)
 // Format: X(Return Type, Function Name, Arguments...)
@@ -1171,6 +1188,9 @@ typedef enum ImageFormatTupleIndex : uint8_t {
     GLuint num_groups_z)                                                       \
   X(void, GetProgramInterfaceiv, GLuint program, GLenum programInterface,      \
     GLenum pname, GLint *params)                                               \
+  X(void, DebugMessageCallback, GLDEBUGPROC callback, const void *userParam)   \
+  X(void, DebugMessageControl, GLenum source, GLenum type, GLenum severity,    \
+    GLsizei count, const GLuint *ids, GLboolean enabled)                       \
   X(void, GetProgramResourceiv, GLuint program, GLenum programInterface,       \
     GLuint index, GLsizei propCount, const GLenum *props, GLsizei bufSize,     \
     GLsizei *length, GLint *params)                                            \
@@ -1208,11 +1228,6 @@ typedef enum ImageFormatTupleIndex : uint8_t {
 // -----------------------------------------------------------------------------
 // Type-Safe Generation
 // -----------------------------------------------------------------------------
-#ifdef _WIN32
-#define GL_API __stdcall
-#else
-#define GL_API
-#endif
 
 // Master macro for declaring the function pointer type AND the global pointer
 // instance. Note: with the gl-prefix-free naming scheme, the loader passes "gl"
