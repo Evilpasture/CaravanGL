@@ -6,3 +6,4 @@ dist/
 .DS_Store
 .clangd
 compile_commands.json
+__pycache__/
