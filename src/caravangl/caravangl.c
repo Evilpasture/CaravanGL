@@ -10,12 +10,8 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 #include "caravangl_arg_indices.h"
-#include "caravangl_buffer.h"
+#include "caravangl_pyspec.h"
 #include "caravangl_loader.h"
-#include "caravangl_pipeline.h"
-#include "caravangl_program.h"
-#include "caravangl_uniformbatch.h"
-#include "caravangl_vao.h"
 #include "fast_build.h"
 #include "pycaravangl.h"
 #include <string.h>
