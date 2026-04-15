@@ -9,16 +9,16 @@
 
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
-#include "caravangl_loader.h"
 #include "caravangl_arg_indices.h"
+#include "caravangl_buffer.h"
+#include "caravangl_loader.h"
+#include "caravangl_pipeline.h"
+#include "caravangl_program.h"
+#include "caravangl_uniformbatch.h"
+#include "caravangl_vao.h"
 #include "fast_build.h"
 #include "pycaravangl.h"
-#include "caravangl_pipeline.h"
-#include "caravangl_buffer.h"
-#include "caravangl_uniformbatch.h"
-#include "caravangl_program.h"
 #include <string.h>
-
 
 // -----------------------------------------------------------------------------
 // Internal Helpers
@@ -79,7 +79,7 @@ static void query_capabilities(PyObject *m) {
  * Loads the function table and discovers GPU capabilities.
  */
 PyCaravanGL_API caravan_init(PyObject *m, PyObject *const *args, Py_ssize_t nargsf,
-                              PyObject *kwnames) {
+                             PyObject *kwnames) {
     WithCaravanGL(m, gl)
     {
         PyObject *loader = nullptr;
@@ -186,8 +186,8 @@ PyCaravanGL_API caravan_inspect(PyObject *m, PyObject *arg) {
 }
 
 PyCaravanGL_API caravan_test_render(PyObject *m, [[maybe_unused]] PyObject *const *args,
-                                     [[maybe_unused]] Py_ssize_t nargs,
-                                     [[maybe_unused]] PyObject *kwnames) {
+                                    [[maybe_unused]] Py_ssize_t nargs,
+                                    [[maybe_unused]] PyObject *kwnames) {
     WithCaravanGL(m, gl)
     {
         if (gl.ClearBufferfv == nullptr) {
@@ -201,91 +201,49 @@ PyCaravanGL_API caravan_test_render(PyObject *m, [[maybe_unused]] PyObject *cons
     return nullptr;
 }
 
-// -----------------------------------------------------------------------------
-// VertexArray Object
-// -----------------------------------------------------------------------------
-
-PyCaravanGL_Status VertexArray_init(PyCaravanVertexArray *self, PyObject *args, PyObject *kwds) {
-    PyObject *m = PyType_GetModule(Py_TYPE(self));
-    WithCaravanGL(m, gl)
-    {
-        gl.GenVertexArrays(1, &self->id);
-    }
-    return 0;
-}
-
-PyCaravanGL_Slot VertexArray_dealloc(PyCaravanVertexArray *self) {
-    PyTypeObject *tp = Py_TYPE(self);
-    PyObject *m = PyType_GetModule(tp);
-    WithCaravanGL(m, gl)
-    {
-        if (self->id) gl.DeleteVertexArrays(1, &self->id);
-    }
-    tp->tp_free((PyObject *)self);
-    Py_DECREF(tp);
-}
-
-PyCaravanGL_API VertexArray_bind_attribute(PyCaravanVertexArray *self, PyObject *const *args,
-                                            Py_ssize_t nargs, PyObject *kwnames) {
-    PyObject *m = PyType_GetModule(Py_TYPE(self));
-    WithCaravanGL(m, gl)
-    {
-        uint32_t location = 0, type = GL_FLOAT;
-        int size = 0, normalized = 0, stride = 0, offset = 0;
-        PyObject *py_buffer = nullptr;
-
-        void *targets[VaoAttr_COUNT] = {
-            [IDX_VAO_ATTR_LOC] = &location,    [IDX_VAO_ATTR_BUF] = &py_buffer,
-            [IDX_VAO_ATTR_SIZE] = &size,       [IDX_VAO_ATTR_TYPE] = &type,
-            [IDX_VAO_ATTR_NORM] = &normalized, [IDX_VAO_ATTR_STRIDE] = &stride,
-            [IDX_VAO_ATTR_OFFSET] = &offset};
-
-        if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.VaoAttrParser, targets))
-            return nullptr;
-
-        // Verify it's actually our Buffer object
-        if (Py_TYPE(py_buffer) != state->BufferType) {
-            PyErr_SetString(PyExc_TypeError, "buffer must be a caravangl.Buffer");
+PyCaravanGL_API caravan_enable_debug(PyObject *m, [[maybe_unused]] PyObject *args) {
+#if !defined(__APPLE__)
+    WithCaravanGL(m, gl) {
+        if (!gl.DebugMessageCallback) {
+            PyErr_SetString(PyExc_RuntimeError, "Debug Output not supported on this driver.");
             return nullptr;
         }
-        PyCaravanBuffer *buf = (PyCaravanBuffer *)py_buffer;
 
-        // Bind VAO and VBO, then map the attribute
-        gl.BindVertexArray(self->id);
-        gl.BindBuffer(GL_ARRAY_BUFFER, buf->buf.id);
+        // 1. Enable debug mode in the driver
+        gl.Enable(GL_DEBUG_OUTPUT);
+        
+        // 2. Force synchronous calls. This blocks the CPU until the callback finishes.
+        // It makes performance worse, but gives you highly accurate error call-stacks.
+        gl.Enable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
 
-        gl.EnableVertexAttribArray(location);
-        gl.VertexAttribPointer(location, size, type, normalized ? GL_TRUE : GL_FALSE, stride,
-                               (void *)(uintptr_t)offset);
+        // 3. Register the callback and pass 'state' as the userParam
+        gl.DebugMessageCallback(opengl_debug_callback, state);
 
-        // Unbind VAO to prevent accidental corruption
-        gl.BindVertexArray(0);
+        // 4. Control what messages you want to hear:
+        
+        // Enable everything by default
+        gl.DebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
+        
+        // Example: Disable "Notification" level spam (like buffer memory placement info)
+        gl.DebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, GL_FALSE);
+
+        // Example: If you wanted to disable specific driver error IDs manually:
+        // GLuint skip_ids[] = { 1234, 5678 };
+        // gl.DebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 2, skip_ids, GL_FALSE);
     }
     Py_RETURN_NONE;
+#else
+    PyErr_SetString(PyExc_RuntimeError, "OpenGL 4.3 Debug Output is not available on macOS.");
+    return nullptr;
+#endif
 }
 
-static PyMethodDef VertexArray_methods[] = {
-    {"bind_attribute", (PyCFunction)(void (*)(void))VertexArray_bind_attribute,
-     METH_FASTCALL | METH_KEYWORDS, "Map a VBO to a shader attribute"},
-    {nullptr}};
 
-static PyType_Slot VertexArray_slots[] = {{Py_tp_init, VertexArray_init},
-                                          {Py_tp_dealloc, VertexArray_dealloc},
-                                          {Py_tp_methods, VertexArray_methods},
-                                          {0, nullptr}};
-
-static PyType_Spec VertexArray_spec = {
-    .name = "caravangl.VertexArray",
-    .basicsize = sizeof(PyCaravanVertexArray),
-    .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
-    .slots = VertexArray_slots,
-};
 
 static PyMethodDef caravan_methods[] = {
     {"init", (PyCFunction)(void (*)(void))caravan_init, METH_FASTCALL | METH_KEYWORDS,
      "Initialize loader"},
-    {"context", (PyCFunction)(void (*)(void))caravan_context, METH_NOARGS,
-     "Get capabilities"},
+    {"context", (PyCFunction)(void (*)(void))caravan_context, METH_NOARGS, "Get capabilities"},
     {"inspect", (PyCFunction)caravan_inspect, METH_O, "Inspect internal C/GL state"},
     {"test_render", (PyCFunction)(void (*)(void))caravan_test_render, METH_FASTCALL | METH_KEYWORDS,
      "Test render"},
@@ -295,41 +253,107 @@ static PyMethodDef caravan_methods[] = {
 // Module Lifecycle
 // -----------------------------------------------------------------------------
 
+/**
+ * Internal helpers for module initialization.
+ */
+
+static int init_types(PyObject *m, CaravanState *state) {
+    struct {
+        const PyType_Spec *spec;
+        PyObject **slot;
+        const char *name;
+    } types[] = {
+        {&Buffer_spec, (PyObject **)&state->BufferType, "Buffer"},
+        {&Pipeline_spec, (PyObject **)&state->PipelineType, "Pipeline"},
+        {&Program_spec, (PyObject **)&state->ProgramType, "Program"},
+        {&VertexArray_spec, (PyObject **)&state->VertexArrayType, "VertexArray"},
+        {&UniformBatch_spec, (PyObject **)&state->UniformBatchType, "UniformBatch"},
+    };
+
+    auto mod_name = PyUnicode_FromString("caravangl");
+    if (!mod_name) return -1;
+
+    for (size_t i = 0; i < sizeof(types) / sizeof(types[0]); i++) {
+        auto type = PyType_FromModuleAndSpec(m, (PyType_Spec *)types[i].spec, nullptr);
+        if (!type) {
+            Py_DECREF(mod_name);
+            return -1;
+        }
+
+        // Set __module__ for better repr() and pickling
+        PyObject_SetAttrString(type, "__module__", mod_name);
+
+        // Add to module (PyModule_AddObjectRef is CPython 3.10+ and safer)
+        if (PyModule_AddObjectRef(m, types[i].name, type) < 0) {
+            Py_DECREF(type);
+            Py_DECREF(mod_name);
+            return -1;
+        }
+
+        // Store in state for fast internal C-access
+        *types[i].slot = type;
+        Py_DECREF(type);
+    }
+
+    Py_DECREF(mod_name);
+    return 0;
+}
+
+static int init_constants(PyObject *m) {
+    static const struct {
+        const char *name;
+        long value;
+    } consts[] = {{"FLOAT", GL_FLOAT},
+                  {"TRIANGLES", GL_TRIANGLES},
+                  {"UF_1I", UF_1I},
+                  {"UF_1F", UF_1F},
+                  {"UF_2F", UF_2F},
+                  {"UF_3F", UF_3F},
+                  {"UF_4F", UF_4F},
+                  {"UF_MAT4", UF_MAT4},
+
+                  // Build Metadata
+                  {"FREE_THREADED",
+#if defined(Py_GIL_DISABLED) && Py_GIL_DISABLED
+                   1
+#else
+                   0
+#endif
+                  },
+                  {"DEBUG_BUILD",
+#if defined(CARAVANGL_DEBUG)
+                   1
+#else
+                   0
+#endif
+                  }};
+
+    for (size_t i = 0; i < sizeof(consts) / sizeof(consts[0]); i++) {
+        if (PyModule_AddIntConstant(m, consts[i].name, consts[i].value) < 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+// -----------------------------------------------------------------------------
+// Module Lifecycle Implementation
+// -----------------------------------------------------------------------------
+
 PyCaravanGL_Status caravan_exec(PyObject *m) {
     CaravanState *state = get_caravan_state(m);
     if (state == nullptr) return -1;
+
+    // Zero out state and prepare fast-path parsers
     memset(state, 0, sizeof(CaravanState));
     caravan_init_parsers(&state->parsers);
 
-    // Buffer
-    state->BufferType = (PyTypeObject *)PyType_FromModuleAndSpec(m, &Buffer_spec, nullptr);
-    PyModule_AddObjectRef(m, "Buffer", (PyObject *)state->BufferType);
+    // Register Classes
+    if (init_types(m, state) < 0) return -1;
 
-    // Pipeline
-    state->PipelineType = (PyTypeObject *)PyType_FromModuleAndSpec(m, &Pipeline_spec, nullptr);
-    PyModule_AddObjectRef(m, "Pipeline", (PyObject *)state->PipelineType);
+    // Register Constants
+    if (init_constants(m) < 0) return -1;
 
-    // Program - FIX: Assign to state->ProgramType
-    state->ProgramType = (PyTypeObject *)PyType_FromModuleAndSpec(m, &Program_spec, nullptr);
-    PyModule_AddObjectRef(m, "Program", (PyObject *)state->ProgramType);
-
-    // VertexArray - FIX: Assign to state->VertexArrayType
-    state->VertexArrayType =
-        (PyTypeObject *)PyType_FromModuleAndSpec(m, &VertexArray_spec, nullptr);
-    PyModule_AddObjectRef(m, "VertexArray", (PyObject *)state->VertexArrayType);
-
-    state->UniformBatchType =
-        (PyTypeObject *)PyType_FromModuleAndSpec(m, &UniformBatch_spec, nullptr);
-    PyModule_AddObjectRef(m, "UniformBatch", (PyObject *)state->UniformBatchType);
-
-    PyModule_AddIntConstant(m, "FLOAT", GL_FLOAT);
-    PyModule_AddIntConstant(m, "TRIANGLES", GL_TRIANGLES);
-    PyModule_AddIntConstant(m, "UF_1I", UF_1I);
-    PyModule_AddIntConstant(m, "UF_1F", UF_1F);
-    PyModule_AddIntConstant(m, "UF_2F", UF_2F);
-    PyModule_AddIntConstant(m, "UF_3F", UF_3F);
-    PyModule_AddIntConstant(m, "UF_4F", UF_4F);
-    PyModule_AddIntConstant(m, "UF_MAT4", UF_MAT4);
     return 0;
 }
 

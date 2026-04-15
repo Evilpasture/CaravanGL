@@ -36,6 +36,9 @@ PyCaravanGL_Status Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObje
             return -1;
         }
 
+        self->program_ref = Py_NewRef(py_program);
+        self->vao_ref = Py_NewRef(py_vao);
+
         // EXTRACT raw IDs internally
         self->program = ((PyCaravanProgram *)py_program)->id;
         self->vao = ((PyCaravanVertexArray *)py_vao)->id;
@@ -172,20 +175,40 @@ PyCaravanGL_API Pipeline_draw(PyCaravanPipeline *self, PyObject *const *args, Py
 /**
  * Pipeline Deallocator
  */
+// 1. Traverse: Visit all tracked PyObject* members
+PyCaravanGL_Status Pipeline_traverse(PyCaravanPipeline *self, visitproc visit, void *arg) {
+    Py_VISIT(self->program_ref);
+    Py_VISIT(self->vao_ref);
+    Py_VISIT(self->params_view);
+    return 0;
+}
+
+// 2. Clear: Break cycles by setting references to NULL
+PyCaravanGL_Status Pipeline_clear(PyCaravanPipeline *self) {
+    Py_CLEAR(self->program_ref);
+    Py_CLEAR(self->vao_ref);
+    Py_CLEAR(self->params_view);
+    return 0;
+}
+
+// 3. Updated Dealloc: Must notify GC before freeing memory
 PyCaravanGL_Slot Pipeline_dealloc(PyCaravanPipeline *self) {
     PyTypeObject *tp = Py_TYPE(self);
 
-    // Clean up the memoryview
-    Py_XDECREF(self->params_view);
+    // Tell GC we are no longer tracking this instance
+    PyObject_GC_UnTrack(self);
 
-    // Release context reference
-    PyObject *m = PyType_GetModule(tp);
-    // (If you need to delete GL objects like programs/vaos, do it here with WithCaravanGL)
+    // Release the buffer if it was used
+    if (self->params_buffer.obj) {
+        PyBuffer_Release(&self->params_buffer);
+    }
+
+    // Call clear to decref members
+    [[maybe_unused]] auto cleared = Pipeline_clear(self);
 
     tp->tp_free((PyObject *)self);
     Py_DECREF(tp);
 }
-
 /**
  * Getter for .params: Exposes the memoryview for zero-copy mutation
  */
@@ -208,6 +231,8 @@ PyMethodDef Pipeline_methods[] = {
 
 PyType_Slot Pipeline_slots[] = {{Py_tp_init, Pipeline_init},
                                 {Py_tp_dealloc, Pipeline_dealloc},
+                                {Py_tp_traverse, Pipeline_traverse},
+                                {Py_tp_clear, Pipeline_clear},
                                 {Py_tp_methods, Pipeline_methods},
                                 {Py_tp_getset, Pipeline_getset},
                                 {Py_tp_doc, "CaravanGL Pipeline: Immutable Draw State"},
@@ -217,6 +242,6 @@ PyType_Spec Pipeline_spec = {
     .name = "caravangl.Pipeline",
     .basicsize = sizeof(PyCaravanPipeline),
     .itemsize = 0,
-    .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,
     .slots = Pipeline_slots,
 };

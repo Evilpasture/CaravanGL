@@ -101,3 +101,62 @@ static inline CaravanGLTable gl_table(PyObject *m) { return get_caravan_state(m)
     } while (false)
 
 #endif
+
+#if !defined(__APPLE__)
+static void APIENTRY opengl_debug_callback(GLenum source, 
+                                          GLenum type, 
+                                          GLuint id, 
+                                          GLenum severity, 
+                                          GLsizei length, 
+                                          const GLchar* message, 
+                                          const void* userParam) 
+{
+    // userParam is the 'state' pointer we passed to DebugMessageCallback.
+    // This allows access to module state without global variables!
+    // [[maybe_unused]] CaravanState* state = (CaravanState*)userParam;
+
+    // The List.
+    static constexpr GLuint ignore_list[] = {
+        131185, // Buffer usage info
+        131218, // Shader recompilation
+        131204, // Texture usage info
+    };
+
+    for (size_t i = 0; i < sizeof(ignore_list) / sizeof(GLuint); ++i) {
+        if (id == ignore_list[i]) return;
+    }
+
+    const char* _src = "Unknown";
+    const char* _typ = "Unknown";
+    const char* _sev = "Unknown";
+
+    switch (source) {
+        case GL_DEBUG_SOURCE_API:             _src = "API"; break;
+        case GL_DEBUG_SOURCE_WINDOW_SYSTEM:   _src = "Window System"; break;
+        case GL_DEBUG_SOURCE_SHADER_COMPILER: _src = "Shader Compiler"; break;
+        case GL_DEBUG_SOURCE_THIRD_PARTY:     _src = "Third Party"; break;
+        case GL_DEBUG_SOURCE_APPLICATION:     _src = "Application"; break;
+        case GL_DEBUG_SOURCE_OTHER:           _src = "Other"; break;
+    }
+
+    switch (type) {
+        case GL_DEBUG_TYPE_ERROR:               _typ = "Error"; break;
+        case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: _typ = "Deprecated"; break;
+        case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:  _typ = "Undefined Behavior"; break;
+        case GL_DEBUG_TYPE_PORTABILITY:         _typ = "Portability"; break;
+        case GL_DEBUG_TYPE_PERFORMANCE:         _typ = "Performance"; break;
+        case GL_DEBUG_TYPE_OTHER:               _typ = "Other"; break;
+    }
+
+    switch (severity) {
+        case GL_DEBUG_SEVERITY_HIGH:         _sev = "HIGH"; break;
+        case GL_DEBUG_SEVERITY_MEDIUM:       _sev = "MEDIUM"; break;
+        case GL_DEBUG_SEVERITY_LOW:          _sev = "LOW"; break;
+        case GL_DEBUG_SEVERITY_NOTIFICATION: _sev = "INFO"; break;
+    }
+
+    // Using raw fprintf because this callback might be triggered by a driver thread 
+    // where holding the Python GIL is not guaranteed.
+    fprintf(stderr, "[CaravanGL] %s | %s [%s] (ID: %u): %s\n", _src, _typ, _sev, id, message);
+}
+#endif

@@ -28,6 +28,9 @@ typedef uint64_t GLuint64;
 typedef intptr_t GLintptr;
 typedef ptrdiff_t GLsizeiptr;
 typedef uint16_t GLhalf;
+typedef uint64_t GLuint64EXT;
+typedef int64_t  GLint64EXT;
+typedef unsigned short GLbitfield16;
 
 typedef struct __GLsync *GLsync;
 
@@ -35,6 +38,9 @@ typedef struct __GLsync *GLsync;
 // OpenGL Constants — Strictly per Khronos gl.xml / OpenGL 4.6 Core
 // Specification
 // -----------------------------------------------------------------------------
+
+// --- Debug ---
+CARAVANGL_CONSTANT GLenum GL_DONT_CARE = 0x1100;
 
 // --- Boolean ---
 CARAVANGL_CONSTANT GLboolean GL_FALSE = 0;
@@ -975,13 +981,21 @@ typedef enum ImageFormatTupleIndex : uint8_t {
   IF_TUPLE_SIZE
 } ImageFormatTupleIndex;
 
+#ifndef APIENTRY
+  #ifdef _WIN32
+    #define APIENTRY __stdcall
+  #else
+    #define APIENTRY
+  #endif
+#endif
+
 #ifdef _WIN32
 #define GL_API __stdcall
 #else
 #define GL_API
 #endif
 
-typedef void (GL_API *GLDEBUGPROC)(
+typedef void (APIENTRY *GLDEBUGPROC)(
     GLenum source,     // Where the error came from (API, Window System, etc.)
     GLenum type,       // Error, Performance warning, Portability, etc.
     GLuint id,         // Driver-specific ID for this message
