@@ -29,9 +29,9 @@ static inline void cv_upload_uniform_batch(CaravanState *s,
         const CaravanUniformBinding *b = &header->bindings[i];
         const void *ptr = data + b->offset;
 
-        if (b->function_id < UF_COUNT) [[likely]] {
+        if (b->function_id < UF_COUNT) [[clang::likely]] {
             UniformUploadFn func = uniform_upload_table[b->function_id];
-            if (func != nullptr) [[likely]] {
+            if (func != nullptr) [[clang::likely]] {
                 func(s, b->location, b->count, ptr);
             }
         } else {
