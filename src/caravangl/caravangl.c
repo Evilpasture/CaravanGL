@@ -345,6 +345,10 @@ static int init_constants(PyObject *m) {
                   {"UF_3F", UF_3F},
                   {"UF_4F", UF_4F},
                   {"UF_MAT4", UF_MAT4},
+                  {"ELEMENT_ARRAY_BUFFER", GL_ELEMENT_ARRAY_BUFFER},
+                    {"UNSIGNED_SHORT", GL_UNSIGNED_SHORT},
+                    {"UNSIGNED_INT", GL_UNSIGNED_INT},
+                    {"UNSIGNED_BYTE", GL_UNSIGNED_BYTE},
 
                   // Build Metadata
                   {"FREE_THREADED",

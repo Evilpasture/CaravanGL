@@ -303,20 +303,21 @@ def test_indexed_pipeline_draw():
     
     # Setup IBO (Indices)
     indices = np.array([0, 1, 2], dtype=np.uint16)
-    ibo = caravangl.Buffer(size=indices.nbytes, data=indices.tobytes(), target=GL_ELEMENT_ARRAY_BUFFER)
-    # In GL Core, IBO is part of VAO state. 
-    # Our VertexArray doesn't have a specific 'bind_index_buffer' method, 
-    # but binding it while the VAO is active works:
-    # (Note: You might want to add VertexArray.set_index_buffer(buf) to your C API)
+    ibo = caravangl.Buffer(size=indices.nbytes, data=indices.tobytes(), target=caravangl.ELEMENT_ARRAY_BUFFER)
+    
+    # --- THE FIX: Link the IBO to the VAO ---
+    vao.bind_index_buffer(ibo) 
     
     pipe = caravangl.Pipeline(
         program=prog, vao=vao, 
         topology=caravangl.TRIANGLES,
-        index_type=GL_UNSIGNED_SHORT
+        index_type=caravangl.UNSIGNED_SHORT # Match GL_UNSIGNED_SHORT
     )
     
-    # Set indices count
-    pipe.params[0] = 3 # vertex_count (indices count in this case)
+    # Set indices count (3 indices for 1 triangle)
+    pipe.params[0] = 3 
+    
+    # This will now work without crashing
     pipe.draw()
 
 # --- 11. Robustness: Argument Validation ---
