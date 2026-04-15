@@ -23,8 +23,8 @@
     X(IDX_BUF_BIND_IDX, "index", uint32_t, 1)
 
 #define SCHEMA_PIPELINE_INIT(X) \
-    X(IDX_PL_PROGRAM, "program",    uint32_t, 1) \
-    X(IDX_PL_VAO,     "vao",        uint32_t, 1) \
+    X(IDX_PL_PROGRAM, "program",    PyObject *, 1) \
+    X(IDX_PL_VAO,     "vao",        PyObject *, 1) \
     X(IDX_PL_TOPO,    "topology",   uint32_t, 0) \
     X(IDX_PL_IDX_TYP, "index_type", uint32_t, 0) \
     X(IDX_PL_DEPTH,   "depth_test", int,      0) \
@@ -46,6 +46,9 @@
     X(IDX_VAO_ATTR_STRIDE, "stride",     int,      0) \
     X(IDX_VAO_ATTR_OFFSET, "offset",     int,      0)
 
+#define SCHEMA_PL_UNIFORMS(X) \
+    X(IDX_PL_U_HEADER, "header", PyObject *, 1) \
+    X(IDX_PL_U_DATA,   "data",   PyObject *, 1)
 
 /** --- THE GENERATOR ENGINE --- **/
 
@@ -63,6 +66,7 @@ DEFINE_INDEX_GROUP(BufBind,  SCHEMA_BUF_BIND)
 DEFINE_INDEX_GROUP(PipelineInit, SCHEMA_PIPELINE_INIT)
 DEFINE_INDEX_GROUP(ProgInit, SCHEMA_PROG_INIT)
 DEFINE_INDEX_GROUP(VaoAttr,  SCHEMA_VAO_ATTR)
+DEFINE_INDEX_GROUP(PipelineUniforms, SCHEMA_PL_UNIFORMS)
 
 // Master list of all parsers
 #define FOR_ALL_PARSERS(X) \
@@ -72,7 +76,8 @@ DEFINE_INDEX_GROUP(VaoAttr,  SCHEMA_VAO_ATTR)
     X(BufBind,  BufBind,  SCHEMA_BUF_BIND) \
     X(PipelineInit, PipelineInit, SCHEMA_PIPELINE_INIT) \
     X(ProgInit,     ProgInit,     SCHEMA_PROG_INIT) \
-    X(VaoAttr,      VaoAttr,      SCHEMA_VAO_ATTR)
+    X(VaoAttr,      VaoAttr,      SCHEMA_VAO_ATTR) \
+    X(PipelineUniforms, PipelineUniforms, SCHEMA_PL_UNIFORMS)
 
 
 // Macro to declare the struct members

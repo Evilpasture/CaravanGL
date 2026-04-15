@@ -277,7 +277,8 @@ static int Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObject *kwds
     
     WithCaravanGL(m, gl) {
         // Variables to parse into
-        uint32_t program_id = 0, vao_id = 0;
+        PyObject *py_program = nullptr;
+        PyObject *py_vao = nullptr;
         uint32_t topology = GL_TRIANGLES;
         uint32_t index_type = 0; // 0 means draw arrays (no index buffer)
         
@@ -287,8 +288,8 @@ static int Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObject *kwds
         int blend_enabled = 0;
         
         void *targets[PipelineInit_COUNT] = {
-            [IDX_PL_PROGRAM] = &program_id,
-            [IDX_PL_VAO]     = &vao_id,
+            [IDX_PL_PROGRAM] = &py_program,
+            [IDX_PL_VAO]     = &py_vao,
             [IDX_PL_TOPO]    = &topology,
             [IDX_PL_IDX_TYP] = &index_type,
             [IDX_PL_DEPTH]   = &depth_test,
@@ -302,8 +303,15 @@ static int Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObject *kwds
         }
 
         // 1. Assign GPU Objects
-        self->program = program_id;
-        self->vao = vao_id;
+        // VALIDATION: Ensure we actually got Program and VertexArray objects
+        if (Py_TYPE(py_program) != state->ProgramType || Py_TYPE(py_vao) != state->VertexArrayType) {
+            PyErr_SetString(PyExc_TypeError, "Pipeline requires Program and VertexArray instances.");
+            return -1;
+        }
+
+        // EXTRACT raw IDs internally
+        self->program = ((PyCaravanProgram *)py_program)->id;
+        self->vao = ((PyCaravanVertexArray *)py_vao)->id;
         self->topology = topology;
         self->index_type = index_type;
 
@@ -342,6 +350,42 @@ static int Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObject *kwds
         self->params_view = PyMemoryView_FromBuffer(&self->params_buffer);
     }
     return 0;
+}
+
+static PyObject* Pipeline_upload_uniforms(PyCaravanPipeline *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames) {
+    PyObject *m = PyType_GetModule(Py_TYPE(self));
+    CaravanState *state = get_caravan_state(m);
+
+    PyObject *py_header = nullptr;
+    PyObject *py_data = nullptr;
+
+    void *targets[PipelineUniforms_COUNT] = {
+        [IDX_PL_U_HEADER] = &py_header,
+        [IDX_PL_U_DATA]   = &py_data
+    };
+
+    if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.PipelineUniformsParser, targets)) {
+        return nullptr;
+    }
+
+    Py_buffer h_view, d_view;
+    if (PyObject_GetBuffer(py_header, &h_view, PyBUF_SIMPLE) != 0) return nullptr;
+    if (PyObject_GetBuffer(py_data, &d_view, PyBUF_SIMPLE) != 0) {
+        PyBuffer_Release(&h_view);
+        return nullptr;
+    }
+
+    WithCaravanGL(m, gl) {
+        // Ensure the program is bound before uploading uniforms
+        cv_bind_program(state, self->program);
+        
+        // Use our high-speed dispatch table logic
+        cv_upload_uniform_batch(state, h_view.buf, d_view.buf);
+    }
+
+    PyBuffer_Release(&h_view);
+    PyBuffer_Release(&d_view);
+    Py_RETURN_NONE;
 }
 
 static PyObject* Pipeline_draw(PyCaravanPipeline *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames) {
@@ -466,6 +510,17 @@ static PyObject *caravan_inspect(PyObject *m, PyObject *arg) {
                 "base_instance",  (long long)p->params.base_instance
             )
         );
+    }
+
+    if (type == state->ProgramType) {
+        PyCaravanProgram *p = (PyCaravanProgram *)arg;
+        return FastBuild_Dict("type", "program", "id", (long long)p->id);
+    }
+
+    // ADDED: VertexArray Inspection
+    if (type == state->VertexArrayType) {
+        PyCaravanVertexArray *v = (PyCaravanVertexArray *)arg;
+        return FastBuild_Dict("type", "vertex_array", "id", (long long)v->id);
     }
 
     // TODO: Add Texture / Framebuffer / Compute inspections here as you build them.
@@ -701,6 +756,7 @@ static PyGetSetDef Pipeline_getset[] = {
 };
 
 static PyMethodDef Pipeline_methods[] = {
+    {"upload_uniforms", (PyCFunction)((void(*)(void)))Pipeline_upload_uniforms, METH_FASTCALL | METH_KEYWORDS, nullptr}
     {"draw", (PyCFunction)(void(*)(void))Pipeline_draw, METH_NOARGS, "Execute the draw call."},
     {}
 };
@@ -737,33 +793,27 @@ static PyMethodDef caravan_methods[] = {
 static int caravan_exec(PyObject *m) {
     CaravanState *state = get_caravan_state(m);
     if (state == nullptr) return -1;
-    
     memset(state, 0, sizeof(CaravanState));
-    
-    // Initialize the FastParse registry
     caravan_init_parsers(&state->parsers);
 
-    // Register the Buffer heap type
+    // Buffer
     state->BufferType = (PyTypeObject *)PyType_FromModuleAndSpec(m, &Buffer_spec, nullptr);
-    if (!state->BufferType) return -1;
-    if (PyModule_AddObjectRef(m, "Buffer", (PyObject *)state->BufferType) < 0) return -1;
+    PyModule_AddObjectRef(m, "Buffer", (PyObject *)state->BufferType);
 
+    // Pipeline
     state->PipelineType = (PyTypeObject *)PyType_FromModuleAndSpec(m, &Pipeline_spec, nullptr);
-    if (!state->PipelineType) return -1;
-    if (PyModule_AddObjectRef(m, "Pipeline", (PyObject *)state->PipelineType) < 0) return -1;
+    PyModule_AddObjectRef(m, "Pipeline", (PyObject *)state->PipelineType);
 
-    PyTypeObject *ProgType = (PyTypeObject *)PyType_FromModuleAndSpec(m, &Program_spec, nullptr);
-    if (PyModule_AddObjectRef(m, "Program", (PyObject *)ProgType) < 0) return -1;
-    Py_DECREF(ProgType);
+    // Program - FIX: Assign to state->ProgramType
+    state->ProgramType = (PyTypeObject *)PyType_FromModuleAndSpec(m, &Program_spec, nullptr);
+    PyModule_AddObjectRef(m, "Program", (PyObject *)state->ProgramType);
 
-    PyTypeObject *VaoType = (PyTypeObject *)PyType_FromModuleAndSpec(m, &VertexArray_spec, nullptr);
-    if (PyModule_AddObjectRef(m, "VertexArray", (PyObject *)VaoType) < 0) return -1;
-    Py_DECREF(VaoType);
+    // VertexArray - FIX: Assign to state->VertexArrayType
+    state->VertexArrayType = (PyTypeObject *)PyType_FromModuleAndSpec(m, &VertexArray_spec, nullptr);
+    PyModule_AddObjectRef(m, "VertexArray", (PyObject *)state->VertexArrayType);
     
-    // EXPORT GL CONSTANTS TO PYTHON
     PyModule_AddIntConstant(m, "FLOAT", GL_FLOAT);
     PyModule_AddIntConstant(m, "TRIANGLES", GL_TRIANGLES);
-
     return 0;
 }
 
@@ -772,6 +822,8 @@ static int caravan_traverse(PyObject *m, visitproc visit, void *arg) {
     if (state) {
         Py_VISIT(state->BufferType);
         Py_VISIT(state->PipelineType);
+        Py_VISIT(state->ProgramType);
+        Py_VISIT(state->VertexArrayType);
     }
     return 0;
 }
@@ -782,6 +834,8 @@ static int caravan_clear(PyObject *m) {
         caravan_free_parsers(&state->parsers);
         Py_CLEAR(state->BufferType);
         Py_CLEAR(state->PipelineType);
+        Py_CLEAR(state->ProgramType);
+        Py_CLEAR(state->VertexArrayType);
     }
     return 0;
 }
