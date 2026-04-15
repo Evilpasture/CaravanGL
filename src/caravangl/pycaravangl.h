@@ -30,3 +30,13 @@ typedef struct PyCaravanPipeline {
     Py_buffer params_buffer;
     
 } PyCaravanPipeline;
+
+typedef struct {
+    PyObject_HEAD
+    GLuint id;
+} PyCaravanProgram;
+
+typedef struct {
+    PyObject_HEAD
+    GLuint id;
+} PyCaravanVertexArray;
