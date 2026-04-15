@@ -47,8 +47,17 @@
     X(IDX_VAO_ATTR_OFFSET, "offset",     int,      0)
 
 #define SCHEMA_PL_UNIFORMS(X) \
-    X(IDX_PL_U_HEADER, "header", PyObject *, 1) \
-    X(IDX_PL_U_DATA,   "data",   PyObject *, 1)
+    X(IDX_PL_U_BATCH, "batch", PyObject *, 1)
+
+#define SCHEMA_UB_INIT(X) \
+    X(IDX_UB_MAX_BINDS, "max_bindings", int, 1) \
+    X(IDX_UB_MAX_BYTES, "max_bytes",    int, 1)
+
+#define SCHEMA_UB_ADD(X) \
+    X(IDX_UB_ADD_FUNC,  "func_id",  uint32_t, 1) \
+    X(IDX_UB_ADD_LOC,   "location", int,      1) \
+    X(IDX_UB_ADD_CNT,   "count",    int,      1) \
+    X(IDX_UB_ADD_SIZE,  "size",     int,      1) // Bytes required for this uniform
 
 /** --- THE GENERATOR ENGINE --- **/
 
@@ -67,17 +76,21 @@ DEFINE_INDEX_GROUP(PipelineInit, SCHEMA_PIPELINE_INIT)
 DEFINE_INDEX_GROUP(ProgInit, SCHEMA_PROG_INIT)
 DEFINE_INDEX_GROUP(VaoAttr,  SCHEMA_VAO_ATTR)
 DEFINE_INDEX_GROUP(PipelineUniforms, SCHEMA_PL_UNIFORMS)
+DEFINE_INDEX_GROUP(UniformBatchInit, SCHEMA_UB_INIT)
+DEFINE_INDEX_GROUP(UniformBatchAdd,  SCHEMA_UB_ADD)
 
 // Master list of all parsers
 #define FOR_ALL_PARSERS(X) \
-    X(Init,     Init,     SCHEMA_INIT) \
-    X(BufInit,  BufInit,  SCHEMA_BUF_INIT) \
-    X(BufWrite, BufWrite, SCHEMA_BUF_WRITE) \
-    X(BufBind,  BufBind,  SCHEMA_BUF_BIND) \
+    X(Init,         Init,         SCHEMA_INIT) \
+    X(BufInit,      BufInit,      SCHEMA_BUF_INIT) \
+    X(BufWrite,     BufWrite,     SCHEMA_BUF_WRITE) \
+    X(BufBind,      BufBind,      SCHEMA_BUF_BIND) \
     X(PipelineInit, PipelineInit, SCHEMA_PIPELINE_INIT) \
     X(ProgInit,     ProgInit,     SCHEMA_PROG_INIT) \
     X(VaoAttr,      VaoAttr,      SCHEMA_VAO_ATTR) \
-    X(PipelineUniforms, PipelineUniforms, SCHEMA_PL_UNIFORMS)
+    X(PipelineUniforms, PipelineUniforms, SCHEMA_PL_UNIFORMS) \
+    X(UniformBatchInit, UniformBatchInit, SCHEMA_UB_INIT) \
+    X(UniformBatchAdd,  UniformBatchAdd,  SCHEMA_UB_ADD)
 
 
 // Macro to declare the struct members

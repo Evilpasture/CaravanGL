@@ -38,6 +38,7 @@ typedef struct CaravanState {
   PyTypeObject *PipelineType;
   PyTypeObject *ProgramType;
   PyTypeObject *VertexArrayType;
+  PyTypeObject *UniformBatchType;
   PyObject *CaravanError;
   CaravanContext ctx;
   CaravanGLTable gl;

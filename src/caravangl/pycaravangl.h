@@ -1,6 +1,7 @@
 #pragma once
 #include <Python.h>
 #include "caravangl.h"
+#include "caravangl_uniform_upload.h"
 
 typedef struct {
     PyObject_HEAD
@@ -40,3 +41,17 @@ typedef struct {
     PyObject_HEAD
     GLuint id;
 } PyCaravanVertexArray;
+
+typedef struct {
+    PyObject_HEAD
+    CaravanUniformHeader *header;
+    char *payload;
+    
+    uint32_t max_bindings;
+    uint32_t max_payload_bytes;
+    uint32_t current_payload_offset;
+    
+    // Memory view exposed to Python
+    Py_buffer payload_buffer;
+    PyObject *payload_view;
+} PyCaravanUniformBatch;

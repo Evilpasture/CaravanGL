@@ -356,35 +356,22 @@ static PyObject* Pipeline_upload_uniforms(PyCaravanPipeline *self, PyObject *con
     PyObject *m = PyType_GetModule(Py_TYPE(self));
     CaravanState *state = get_caravan_state(m);
 
-    PyObject *py_header = nullptr;
-    PyObject *py_data = nullptr;
+    PyObject *py_batch = nullptr;
+    void *targets[PipelineUniforms_COUNT] = { [IDX_PL_U_BATCH] = &py_batch };
 
-    void *targets[PipelineUniforms_COUNT] = {
-        [IDX_PL_U_HEADER] = &py_header,
-        [IDX_PL_U_DATA]   = &py_data
-    };
+    if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.PipelineUniformsParser, targets)) return nullptr;
 
-    if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.PipelineUniformsParser, targets)) {
+    if (Py_TYPE(py_batch) != state->UniformBatchType) {
+        PyErr_SetString(PyExc_TypeError, "Expected UniformBatch object.");
         return nullptr;
-    }
+    } 
 
-    Py_buffer h_view, d_view;
-    if (PyObject_GetBuffer(py_header, &h_view, PyBUF_SIMPLE) != 0) return nullptr;
-    if (PyObject_GetBuffer(py_data, &d_view, PyBUF_SIMPLE) != 0) {
-        PyBuffer_Release(&h_view);
-        return nullptr;
-    }
+    PyCaravanUniformBatch *batch = (PyCaravanUniformBatch *)py_batch;
 
     WithCaravanGL(m, gl) {
-        // Ensure the program is bound before uploading uniforms
         cv_bind_program(state, self->program);
-        
-        // Use our high-speed dispatch table logic
-        cv_upload_uniform_batch(state, h_view.buf, d_view.buf);
+        cv_upload_uniform_batch(state, batch->header, batch->payload);
     }
-
-    PyBuffer_Release(&h_view);
-    PyBuffer_Release(&d_view);
     Py_RETURN_NONE;
 }
 
@@ -723,6 +710,128 @@ static PyType_Spec VertexArray_spec = {
     .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, .slots = VertexArray_slots,
 };
 
+// -----------------------------------------------------------------------------
+// UniformBatch Object (Zero-Copy Command Stream)
+// -----------------------------------------------------------------------------
+
+static int UniformBatch_init(PyCaravanUniformBatch *self, PyObject *args, PyObject *kwds) {
+    PyObject *m = PyType_GetModule(Py_TYPE(self));
+    CaravanState *state = get_caravan_state(m);
+    
+    int max_binds = 0, max_bytes = 0;
+    void *targets[UniformBatchInit_COUNT] = {
+        [IDX_UB_MAX_BINDS] = &max_binds,
+        [IDX_UB_MAX_BYTES] = &max_bytes
+    };
+
+    if (!FastParse_Unified(args, kwds, nullptr, &state->parsers.UniformBatchInitParser, targets)) return -1;
+
+    // Allocate the contiguous header (size + array of bindings)
+    size_t header_size = sizeof(CaravanUniformHeader) + (sizeof(CaravanUniformBinding) * max_binds);
+    self->header = (CaravanUniformHeader *)PyMem_Malloc(header_size);
+    self->header->count = 0;
+    
+    self->payload = (char *)PyMem_Calloc(1, max_bytes); // Zeroed out memory
+    self->max_bindings = max_binds;
+    self->max_payload_bytes = max_bytes;
+    self->current_payload_offset = 0;
+
+    // Set up the memory view for Python (exposing it as raw bytes 'B')
+    self->payload_buffer.buf = self->payload;
+    self->payload_buffer.len = max_bytes;
+    self->payload_buffer.readonly = 0;
+    self->payload_buffer.itemsize = 1;
+    self->payload_buffer.format = "B"; 
+    self->payload_buffer.ndim = 1;
+    
+    static Py_ssize_t ub_stride = 1;
+    self->payload_buffer.shape = (Py_ssize_t *)&self->max_payload_bytes;
+    self->payload_buffer.strides = &ub_stride;
+    
+    self->payload_buffer.obj = (PyObject *)self;
+    Py_INCREF(self);
+    
+    self->payload_view = PyMemoryView_FromBuffer(&self->payload_buffer);
+    return 0;
+}
+
+static void UniformBatch_dealloc(PyCaravanUniformBatch *self) {
+    PyTypeObject *tp = Py_TYPE(self);
+    Py_XDECREF(self->payload_view);
+    if (self->header) PyMem_Free(self->header);
+    if (self->payload) PyMem_Free(self->payload);
+    tp->tp_free((PyObject *)self);
+    Py_DECREF(tp);
+}
+
+static PyObject* UniformBatch_add(PyCaravanUniformBatch *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames) {
+    PyObject *m = PyType_GetModule(Py_TYPE(self));
+    CaravanState *state = get_caravan_state(m);
+
+    uint32_t func_id = 0;
+    int location = 0, count = 0, size = 0;
+    
+    void *targets[UniformBatchAdd_COUNT] = {
+        [IDX_UB_ADD_FUNC] = &func_id,
+        [IDX_UB_ADD_LOC]  = &location,
+        [IDX_UB_ADD_CNT]  = &count,
+        [IDX_UB_ADD_SIZE] = &size
+    };
+
+    if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.UniformBatchAddParser, targets)) return nullptr;
+
+    if (self->header->count >= self->max_bindings) {
+        PyErr_SetString(PyExc_RuntimeError, "UniformBatch maximum bindings exceeded.");
+        return nullptr;
+    }
+    if (self->current_payload_offset + size > self->max_payload_bytes) {
+        PyErr_SetString(PyExc_RuntimeError, "UniformBatch payload capacity exceeded.");
+        return nullptr;
+    }
+
+    uint32_t offset = self->current_payload_offset;
+    
+    // Register the binding in the C header
+    CaravanUniformBinding *b = &self->header->bindings[self->header->count++];
+    b->function_id = func_id;
+    b->location = location;
+    b->count = count;
+    b->offset = offset;
+
+    // Advance the memory allocator
+    self->current_payload_offset += size;
+
+    // Return the byte offset to Python so it knows where to write the data
+    return PyLong_FromUnsignedLong(offset);
+}
+
+static PyObject* UniformBatch_get_data(PyCaravanUniformBatch *self, void *closure) {
+    return Py_NewRef(self->payload_view);
+}
+
+static PyGetSetDef UniformBatch_getset[] = {
+    {"data", (getter)UniformBatch_get_data, nullptr, "Zero-copy access to the uniform payload memory", nullptr},
+    {}
+};
+
+static PyMethodDef UniformBatch_methods[] = {
+    {"add", (PyCFunction)(void(*)(void))UniformBatch_add, METH_FASTCALL | METH_KEYWORDS, "Register a uniform and get its byte offset."},
+    {}
+};
+
+static PyType_Slot UniformBatch_slots[] = {
+    {Py_tp_init, UniformBatch_init},
+    {Py_tp_dealloc, UniformBatch_dealloc},
+    {Py_tp_methods, UniformBatch_methods},
+    {Py_tp_getset, UniformBatch_getset},
+    {}
+};
+
+static PyType_Spec UniformBatch_spec = {
+    .name = "caravangl.UniformBatch", .basicsize = sizeof(PyCaravanUniformBatch),
+    .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE, .slots = UniformBatch_slots,
+};
+
 /**
  * Pipeline Deallocator
  */
@@ -811,9 +920,18 @@ static int caravan_exec(PyObject *m) {
     // VertexArray - FIX: Assign to state->VertexArrayType
     state->VertexArrayType = (PyTypeObject *)PyType_FromModuleAndSpec(m, &VertexArray_spec, nullptr);
     PyModule_AddObjectRef(m, "VertexArray", (PyObject *)state->VertexArrayType);
+
+    state->UniformBatchType = (PyTypeObject *)PyType_FromModuleAndSpec(m, &UniformBatch_spec, nullptr);
+    PyModule_AddObjectRef(m, "UniformBatch", (PyObject *)state->UniformBatchType);
     
     PyModule_AddIntConstant(m, "FLOAT", GL_FLOAT);
     PyModule_AddIntConstant(m, "TRIANGLES", GL_TRIANGLES);
+    PyModule_AddIntConstant(m, "UF_1I", UF_1I);
+    PyModule_AddIntConstant(m, "UF_1F", UF_1F);
+    PyModule_AddIntConstant(m, "UF_2F", UF_2F);
+    PyModule_AddIntConstant(m, "UF_3F", UF_3F);
+    PyModule_AddIntConstant(m, "UF_4F", UF_4F);
+    PyModule_AddIntConstant(m, "UF_MAT4", UF_MAT4);
     return 0;
 }
 
