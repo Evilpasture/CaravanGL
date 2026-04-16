@@ -75,8 +75,8 @@ static void query_capabilities(CaravanState *state) {
  * caravan.init(loader)
  * Loads the function table and discovers GPU capabilities.
  */
-PyCaravanGL_API caravan_init(PyObject *mod, PyObject *const *args, Py_ssize_t nargsf,
-                             PyObject *kwnames) {
+PyCaravanGL_API caravan_meth_init(PyObject *mod, PyObject *const *args, Py_ssize_t nargsf,
+                                  PyObject *kwnames) {
     // 1. Get state (Lock-free, module state is stable)
     auto state = get_caravan_state(mod);
     if (!state) {
@@ -123,7 +123,7 @@ static inline PyObject *build_context_dict(CaravanState *state, CaravanGLTable *
                                           state->ctx.viewport.w, state->ctx.viewport.h));
 }
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-PyCaravanGL_API caravan_context(PyObject *mod, [[maybe_unused]] PyObject *args) {
+PyCaravanGL_API caravan_meth_context(PyObject *mod, [[maybe_unused]] PyObject *args) {
     WithCaravanGL(mod, OpenGL) {
         if (OpenGL->GetString == nullptr) {
             PyErr_SetString(PyExc_RuntimeError, "OpenGL not loaded. Call init() first.");
@@ -181,7 +181,7 @@ static inline PyObject *inspect_uniform_batch(PyCaravanUniformBatch *bat) {
 
 // --- Main Dispatcher ---
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-PyCaravanGL_API caravan_inspect(PyObject *mod, PyObject *arg) {
+PyCaravanGL_API caravan_meth_inspect(PyObject *mod, PyObject *arg) {
     auto state = get_caravan_state(mod);
     if (!state) {
         [[clang::unlikely]] return nullptr;
@@ -213,23 +213,23 @@ PyCaravanGL_API caravan_inspect(PyObject *mod, PyObject *arg) {
     Py_RETURN_NONE;
 }
 
-PyCaravanGL_API caravan_clear(PyObject *mod, PyObject *const *args, Py_ssize_t nargs,
-                              PyObject *kwnames) {
+PyCaravanGL_API caravan_meth_clear(PyObject *mod, PyObject *const *args, Py_ssize_t nargs,
+                                   PyObject *kwnames) {
+    auto state = get_caravan_state(mod);
+    uint32_t mask = 0;
+    void *targets[Clear_COUNT] = {[IDX_CLR_MASK] = &mask};
+
+    if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.ClearParser, targets)) {
+        return nullptr;
+    }
     WithCaravanGL(mod, OpenGL) {
-        uint32_t mask = 0;
-        void *targets[Clear_COUNT] = {[IDX_CLR_MASK] = &mask};
-
-        if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.ClearParser, targets)) {
-            return nullptr;
-        }
-
         OpenGL->Clear(mask);
     }
     Py_RETURN_NONE;
 }
 
-PyCaravanGL_API caravan_clear_color(PyObject *mod, PyObject *const *args, Py_ssize_t nargs,
-                                    PyObject *kwnames) {
+PyCaravanGL_API caravan_meth_clear_color(PyObject *mod, PyObject *const *args, Py_ssize_t nargs,
+                                         PyObject *kwnames) {
     auto state = get_caravan_state(mod);
     float red = 0.0F;
     float green = 0.0F;
@@ -250,8 +250,8 @@ PyCaravanGL_API caravan_clear_color(PyObject *mod, PyObject *const *args, Py_ssi
     Py_RETURN_NONE;
 }
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-PyCaravanGL_API caravan_enable_debug([[maybe_unused]] PyObject *mod,
-                                     [[maybe_unused]] PyObject *args) {
+PyCaravanGL_API caravan_meth_enable_debug([[maybe_unused]] PyObject *mod,
+                                          [[maybe_unused]] PyObject *args) {
 #if !defined(__APPLE__)
     WithCaravanGL(mod, gl) {
         if (!OpenGL->DebugMessageCallback) {
@@ -293,15 +293,15 @@ PyCaravanGL_API caravan_enable_debug([[maybe_unused]] PyObject *mod,
 }
 
 static const PyMethodDef caravan_methods[] = {
-    {"init", (PyCFunction)(void (*)(void))caravan_init, METH_FASTCALL | METH_KEYWORDS,
+    {"init", (PyCFunction)(void (*)(void))caravan_meth_init, METH_FASTCALL | METH_KEYWORDS,
      "Initialize loader"},
-    {"enable_debug", (PyCFunction)caravan_enable_debug, METH_NOARGS, "Enable GL Debug Output"},
-    {"context", (PyCFunction)(void (*)(void))caravan_context, METH_NOARGS, "Get capabilities"},
-    {"inspect", (PyCFunction)caravan_inspect, METH_O, "Inspect internal C/GL state"},
-    {"clear", (PyCFunction)(void (*)(void))caravan_clear, METH_FASTCALL | METH_KEYWORDS,
+    {"enable_debug", (PyCFunction)caravan_meth_enable_debug, METH_NOARGS, "Enable GL Debug Output"},
+    {"context", (PyCFunction)(void (*)(void))caravan_meth_context, METH_NOARGS, "Get capabilities"},
+    {"inspect", (PyCFunction)caravan_meth_inspect, METH_O, "Inspect internal C/GL state"},
+    {"clear", (PyCFunction)(void (*)(void))caravan_meth_clear, METH_FASTCALL | METH_KEYWORDS,
      "Clear buffers (e.g. COLOR_BUFFER_BIT)"},
-    {"clear_color", (PyCFunction)(void (*)(void))caravan_clear_color, METH_FASTCALL | METH_KEYWORDS,
-     "Set clear color"},
+    {"clear_color", (PyCFunction)(void (*)(void))caravan_meth_clear_color,
+     METH_FASTCALL | METH_KEYWORDS, "Set clear color"},
     {}};
 
 // -----------------------------------------------------------------------------
@@ -448,7 +448,7 @@ PyCaravanGL_Status caravan_traverse(PyObject *module, visitproc visit, void *arg
                                     &context);
 }
 
-PyCaravanGL_Status slot_caravan_clear(PyObject *module) {
+PyCaravanGL_Status caravan_clear(PyObject *module) {
     CaravanState *state = get_caravan_state(module);
     if (state == nullptr) {
         return 0;
@@ -485,7 +485,7 @@ static PyModuleDef caravan_module = {
     .m_methods = (PyMethodDef *)caravan_methods,
     .m_slots = (PyModuleDef_Slot *)caravan_slots,
     .m_traverse = caravan_traverse,
-    .m_clear = slot_caravan_clear,
+    .m_clear = caravan_clear,
     .m_free = nullptr,
 };
 
