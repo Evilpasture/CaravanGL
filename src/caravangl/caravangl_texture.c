@@ -3,7 +3,7 @@
 
 PyCaravanGL_Status Texture_init(PyCaravanTexture *self, PyObject *args, PyObject *kwds) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
-    auto state = (CaravanState *)PyModule_GetState(mod);
+    auto state = get_caravan_state(mod);
     uint32_t target = GL_TEXTURE_2D;
     void *targets[TexInit_COUNT] = {[IDX_TEX_TARGET] = &target};
 
@@ -42,7 +42,7 @@ PyCaravanGL_Slot Texture_dealloc(PyCaravanTexture *self) {
 PyCaravanGL_API Texture_upload(PyCaravanTexture *self, PyObject *const *args, Py_ssize_t nargs,
                                PyObject *kwnames) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
-    auto state = (CaravanState *)PyModule_GetState(mod);
+    auto state = get_caravan_state(mod);
     int level = 0;
     int width = 0;
     int height = 0;
@@ -113,7 +113,7 @@ PyCaravanGL_API Texture_upload(PyCaravanTexture *self, PyObject *const *args, Py
 PyCaravanGL_API Texture_bind(PyCaravanTexture *self, PyObject *const *args, Py_ssize_t nargs,
                              PyObject *kwnames) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
-    auto state = (CaravanState *)PyModule_GetState(mod);
+    auto state = get_caravan_state(mod);
     uint32_t unit = 0;
     void *targets[TexBind_COUNT] = {[IDX_TEX_BIND_UNIT] = &unit};
 

@@ -77,22 +77,29 @@ static void query_capabilities(CaravanState *state) {
  */
 PyCaravanGL_API caravan_init(PyObject *mod, PyObject *const *args, Py_ssize_t nargsf,
                              PyObject *kwnames) {
+    // 1. Get state (Lock-free, module state is stable)
+    auto state = get_caravan_state(mod);
+    if (!state) {
+        return nullptr;
+    }
+
+    // 2. Extract targets (Python work - Outside the lock)
+    PyObject *loader = nullptr;
+    void *targets[Init_COUNT] = {[IDX_INIT_LOADER] = (void *)&loader};
+
+    if (!FastParse_Unified(args, PyVectorcall_NARGS(nargsf), kwnames, &state->parsers.InitParser,
+                           targets)) {
+        return nullptr;
+    }
+
+    // 3. Perform GPU Work (Inside the lock)
     WithCaravanGL(mod, gl) {
-        PyObject *loader = nullptr;
-        void *targets[Init_COUNT] = {[IDX_INIT_LOADER] = (void *)&loader};
-
-        if (!FastParse_Unified(args, PyVectorcall_NARGS(nargsf), kwnames,
-                               &state->parsers.InitParser, targets)) {
-            return nullptr;
-        }
-
         if (load_gl(state, loader) < 0) {
             return nullptr;
         }
-
-        // Pass the state directly instead of re-entering WithCaravanGL
         query_capabilities(state);
     }
+
     Py_RETURN_NONE;
 }
 
@@ -223,7 +230,7 @@ PyCaravanGL_API caravan_clear(PyObject *mod, PyObject *const *args, Py_ssize_t n
 
 PyCaravanGL_API caravan_clear_color(PyObject *mod, PyObject *const *args, Py_ssize_t nargs,
                                     PyObject *kwnames) {
-    auto state = (CaravanState *)PyModule_GetState(mod);
+    auto state = get_caravan_state(mod);
     float red = 0.0F;
     float green = 0.0F;
     float blue = 0.0F;

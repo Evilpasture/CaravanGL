@@ -81,7 +81,7 @@ PyCaravanGL_Status Buffer_init(PyCaravanBuffer *self, PyObject *args, PyObject *
 PyCaravanGL_API Buffer_write(PyCaravanBuffer *self, PyObject *const *args, Py_ssize_t nargs,
                              PyObject *kwnames) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
-    auto state = (CaravanState *)PyModule_GetState(mod);
+    auto state = get_caravan_state(mod);
 
     PyObject *data = nullptr;
     int offset = 0;
@@ -119,7 +119,7 @@ PyCaravanGL_API Buffer_write(PyCaravanBuffer *self, PyObject *const *args, Py_ss
 PyCaravanGL_API Buffer_bind_base(PyCaravanBuffer *self, PyObject *const *args, Py_ssize_t nargs,
                                  PyObject *kwnames) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
-    auto state = (CaravanState *)PyModule_GetState(mod);
+    auto state = get_caravan_state(mod);
 
     uint32_t index = 0;
     void *targets[BufBind_COUNT] = {[IDX_BUF_BIND_IDX] = &index};

@@ -63,9 +63,6 @@ static inline CaravanGLTable gl_table(PyObject *mod) {
 // Internal helper: must take a pointer to the pointer for cleanup
 static inline void internal_cv_auto_unlock(MagMutex **mod) {
     if (*mod) {
-        [[maybe_unused]] auto wtf =
-            // NOLINTNEXTLINE(clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling)
-            fprintf(stderr, "[DEBUG] RAII Triggered: Unlocking %p\n", (void *)*mod);
         MagMutex_Unlock(*mod);
     }
 }

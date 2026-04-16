@@ -24,7 +24,7 @@ static GLuint compile_shader(CaravanGLTable *OpenGL, GLenum type, const char *so
 
 PyCaravanGL_Status Program_init(PyCaravanProgram *self, PyObject *args, PyObject *kwds) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
-    auto state = (CaravanState *)PyModule_GetState(mod);
+    auto state = get_caravan_state(mod);
     const char *vs_src = nullptr;
     const char *fs_src = nullptr;
 
