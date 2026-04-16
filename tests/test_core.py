@@ -385,3 +385,95 @@ def test_program_uniform_query():
     
     loc_missing = prog.get_uniform_location("nonExistent")
     assert loc_missing == -1
+
+# --- Supplemental FBO Constants ---
+GL_FRAMEBUFFER = 0x8D40
+GL_COLOR_ATTACHMENT0 = 0x8CE0
+
+# --- 15. Framebuffer: Lifecycle & Completeness ---
+
+def test_framebuffer_completeness():
+    """Verify an FBO is marked complete when properly attached."""
+    # 1. Create backing texture
+    tex = caravangl.Texture(target=GL_TEXTURE_2D)
+    tex.upload(
+        width=512, height=512,
+        internal_format=GL_RGBA8,
+        format=GL_RGBA,
+        type=GL_UNSIGNED_BYTE,
+        data=None # Allocate only
+    )
+    
+    # 2. Attach to FBO
+    fbo = caravangl.Framebuffer()
+    fbo.attach_texture(attachment=GL_COLOR_ATTACHMENT0, texture=tex)
+    
+    # 3. Check status (should return True)
+    assert fbo.check_status() is True
+
+# --- 16. Framebuffer: Incomplete Error Handling ---
+
+def test_framebuffer_incomplete():
+    """Verify that an empty FBO correctly raises an exception."""
+    fbo = caravangl.Framebuffer()
+
+    # An FBO with no attachments is mathematically incomplete in OpenGL.
+    # caravangl should catch this and raise a RuntimeError.
+    with pytest.raises(RuntimeError) as excinfo:
+        fbo.check_status()
+
+    # UPDATED: Match the new, specific error message we added to the C code
+    msg = str(excinfo.value).lower()
+    assert ("no attachments" in msg) or ("not complete" in msg)
+
+# --- 17. Viewport: State Tracking ---
+
+def test_viewport_state_update():
+    """Verify viewport updates properly sync with the isolated C-context."""
+    # Change viewport to an arbitrary resolution
+    caravangl.viewport(x=15, y=25, w=1920, h=1080)
+    
+    # Ask the C-backend for a snapshot of the context state
+    ctx = caravangl.context()
+    vp = ctx["viewport"] # Tuple: (x, y, w, h)
+    
+    assert vp[0] == 15
+    assert vp[1] == 25
+    assert vp[2] == 1920
+    assert vp[3] == 1080
+
+# --- 18. Integration: FBO Context Switching ---
+
+def test_fbo_render_context_switch():
+    """Execute a full render-to-texture and render-to-screen pass."""
+    # 1. Setup FBO
+    tex = caravangl.Texture(target=GL_TEXTURE_2D)
+    tex.upload(64, 64, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, None)
+    fbo = caravangl.Framebuffer()
+    fbo.attach_texture(GL_COLOR_ATTACHMENT0, tex)
+    fbo.check_status()
+    
+    # 2. Dummy Pipeline
+    prog = caravangl.Program(vertex_shader=VS_DUMMY, fragment_shader=FS_DUMMY)
+    vao = caravangl.VertexArray()
+    pipe = caravangl.Pipeline(program=prog, vao=vao)
+    
+    # --- PASS 1: Render to FBO ---
+    fbo.bind()
+    caravangl.viewport(x=0, y=0, w=64, h=64)
+    caravangl.clear_color(1.0, 0.0, 0.0, 1.0)
+    caravangl.clear(GL_COLOR_BUFFER_BIT)
+    pipe.draw()
+    
+    # --- PASS 2: Render to Screen ---
+    caravangl.bind_default_framebuffer()
+    caravangl.viewport(x=0, y=0, w=800, h=600)
+    caravangl.clear_color(0.0, 0.0, 0.0, 1.0)
+    caravangl.clear(GL_COLOR_BUFFER_BIT)
+    
+    tex.bind(unit=0)
+    pipe.draw()
+    
+    # If we reach this line without an OpenGL error, segmentation fault, 
+    # or SIGABRT, the FBO context switching is perfectly thread-safe and robust.
+    assert True

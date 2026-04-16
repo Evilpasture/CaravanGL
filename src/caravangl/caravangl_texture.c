@@ -14,13 +14,16 @@ PyCaravanGL_Status Texture_init(PyCaravanTexture *self, PyObject *args, PyObject
         OpenGL->GenTextures(1, &self->tex.id);
         self->tex.target = target;
 
-        // Setup sane defaults for 3.3 Core (Requires this or incomplete texture error)
-        OpenGL->BindTexture(target, self->tex.id);
+        // FIX: Use the state tracker to bind the texture safely so the cache knows about it
+        cv_bind_texture(state, 0, &self->tex, 0);
+
         OpenGL->TexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         OpenGL->TexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         OpenGL->TexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         OpenGL->TexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        OpenGL->BindTexture(target, 0);
+
+        // We no longer unbind to 0 here. We just leave it bound to Unit 0.
+        // The state tracker knows it's there, so it's perfectly safe.
     }
     return 0;
 }
@@ -31,6 +34,16 @@ PyCaravanGL_Slot Texture_dealloc(PyCaravanTexture *self) {
 
     WithCaravanGL(mod, OpenGL) {
         if (self->tex.id != 0) {
+#pragma unroll 4
+            // FIX: Prevent Cache Poisoning.
+            // If this texture is currently cached in any unit, clear the cache.
+            for (int i = 0; i < CARAVAN_MAX_TEXTURE_UNITS; i++) {
+                if (state->ctx.bound.texture_units[i].id == self->tex.id) {
+                    state->ctx.bound.texture_units[i].id = 0;
+                    state->ctx.bound.texture_units[i].target = 0;
+                }
+            }
+
             OpenGL->DeleteTextures(1, &self->tex.id);
             self->tex.id = 0;
         }

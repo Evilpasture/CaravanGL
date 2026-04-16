@@ -55,12 +55,57 @@ PyCaravanGL_API Framebuffer_attach_texture(PyCaravanFramebuffer *self, PyObject 
         cv_bind_fbo_combined(state, self->fbo.id);
         OpenGL->FramebufferTexture2D(GL_FRAMEBUFFER, attachment, tex->tex.target, tex->tex.id,
                                      level);
+
+        switch (attachment) {
+        // Dense range: GL_COLOR_ATTACHMENT0 is 0x8CE0, 1 is 0x8CE1, etc.
+        case GL_COLOR_ATTACHMENT0:
+        case GL_COLOR_ATTACHMENT1:
+        case GL_COLOR_ATTACHMENT2:
+        case GL_COLOR_ATTACHMENT3:
+        case GL_COLOR_ATTACHMENT4:
+        case GL_COLOR_ATTACHMENT5:
+        case GL_COLOR_ATTACHMENT6:
+        case GL_COLOR_ATTACHMENT7:
+        case GL_COLOR_ATTACHMENT8:
+        case GL_COLOR_ATTACHMENT9:
+        case GL_COLOR_ATTACHMENT10:
+        case GL_COLOR_ATTACHMENT11:
+        case GL_COLOR_ATTACHMENT12:
+        case GL_COLOR_ATTACHMENT13:
+        case GL_COLOR_ATTACHMENT14:
+        case GL_COLOR_ATTACHMENT15:
+            self->fbo.color_attachments_count++;
+            break;
+
+        case GL_DEPTH_ATTACHMENT:
+            self->fbo.has_depth = true;
+            break;
+
+        case GL_STENCIL_ATTACHMENT:
+            self->fbo.has_stencil = true;
+            break;
+
+        case GL_DEPTH_STENCIL_ATTACHMENT:
+            self->fbo.has_depth = true;
+            self->fbo.has_stencil = true;
+            break;
+
+        default:
+            // Handle unexpected attachments (GL_DEPTH_STENCIL, etc.)
+            break;
+        }
     }
     Py_RETURN_NONE;
 }
 
-PyCaravanGL_API Framebuffer_check_status(PyCaravanFramebuffer *self, PyObject *args) {
+PyCaravanGL_API Framebuffer_check_status(PyCaravanFramebuffer *self,
+                                         [[maybe_unused]] PyObject *args) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
+    if (self->fbo.color_attachments_count == 0 && !self->fbo.has_depth) {
+        PyErr_SetString(PyExc_RuntimeError, "Framebuffer has no attachments!");
+        return nullptr;
+    }
+
     WithCaravanGL(mod, OpenGL) {
         cv_bind_fbo_combined(state, self->fbo.id);
         GLenum status = OpenGL->CheckFramebufferStatus(GL_FRAMEBUFFER);
