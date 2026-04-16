@@ -25,11 +25,6 @@ Checks: >
 WarningsAsErrors: 'bugprone-*,performance-*,clang-analyzer-*'
 
 CheckOptions:
-  # Python headers use macros that often trigger naming warnings.
-  # We disable strict naming to accommodate PyObject_HEAD and tp_ slots.
-  readability-identifier-naming.VariableCase: lower_case
-  readability-identifier-naming.FunctionCase: lower_case
-  
   # Optimization: Allow always_inline for the hot-path draw loops
   performance-no-int-to-ptr.IgnoreDirectories: 'Python'
 

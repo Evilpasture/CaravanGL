@@ -1,10 +1,10 @@
 #pragma once
-#include <Python.h>
 #include "caravangl_uniform_upload.h"
+#include <Python.h>
 
-#define PyCaravanGL_API [[nodiscard]] PyObject *
-#define PyCaravanGL_Status [[nodiscard]] int
-#define PyCaravanGL_Slot void
+#define PyCaravanGL_API [[nodiscard]] static PyObject *
+#define PyCaravanGL_Status [[nodiscard]] static int
+#define PyCaravanGL_Slot static void
 
 typedef struct {
     PyObject_HEAD CaravanBuffer buf;
@@ -12,8 +12,7 @@ typedef struct {
 } PyCaravanBuffer;
 
 typedef struct {
-    PyObject_HEAD
-    CaravanTexture tex;
+    PyObject_HEAD CaravanTexture tex;
 } PyCaravanTexture;
 
 typedef struct PyCaravanPipeline {

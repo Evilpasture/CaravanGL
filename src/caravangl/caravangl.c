@@ -8,12 +8,12 @@
  */
 
 #define PY_SSIZE_T_CLEAN
-#include <Python.h>
 #include "caravangl_arg_indices.h"
 #include "caravangl_loader.h"
 #include "caravangl_pyspec.h"
 #include "fast_build.h"
 #include "pycaravangl.h"
+#include <Python.h>
 #include <string.h>
 
 // -----------------------------------------------------------------------------
@@ -24,9 +24,8 @@
  * Queries GPU hardware limits and populates the state context.
  * Called once during caravan.init().
  */
-static void query_capabilities(PyObject *m) {
-    WithCaravanGL(m, gl)
-    {
+static void query_capabilities(PyObject *mod) {
+    WithCaravanGL(mod, gl) {
         if (gl.GetIntegerv != nullptr) {
             // Textures
             gl.GetIntegerv(GL_MAX_TEXTURE_SIZE, &state->ctx.caps.max_texture_size);
@@ -41,9 +40,10 @@ static void query_capabilities(PyObject *m) {
             gl.GetIntegerv(GL_MAX_UNIFORM_BUFFER_BINDINGS, &state->ctx.caps.max_ubo_bindings);
 
             // Viewport
-            GLint v[4] = {};
-            gl.GetIntegerv(GL_VIEWPORT, v);
-            state->ctx.viewport = (CaravanRect){.x = v[0], .y = v[1], .w = v[2], .h = v[3]};
+            GLint viewport[4] = {};
+            gl.GetIntegerv(GL_VIEWPORT, viewport);
+            state->ctx.viewport = (CaravanRect){
+                .x = viewport[0], .y = viewport[1], .w = viewport[2], .h = viewport[3]};
         }
 
 #ifndef __APPLE__
@@ -74,20 +74,21 @@ static void query_capabilities(PyObject *m) {
  * caravan.init(loader)
  * Loads the function table and discovers GPU capabilities.
  */
-PyCaravanGL_API caravan_init(PyObject *m, PyObject *const *args, Py_ssize_t nargsf,
+PyCaravanGL_API caravan_init(PyObject *mod, PyObject *const *args, Py_ssize_t nargsf,
                              PyObject *kwnames) {
-    WithCaravanGL(m, gl)
-    {
+    WithCaravanGL(mod, gl) {
         PyObject *loader = nullptr;
-        void *targets[Init_COUNT] = {[IDX_INIT_LOADER] = &loader};
+        void *targets[Init_COUNT] = {[IDX_INIT_LOADER] = (void *)&loader};
 
         if (!FastParse_Unified(args, PyVectorcall_NARGS(nargsf), kwnames,
                                &state->parsers.InitParser, targets)) {
             return nullptr;
         }
 
-        if (load_gl(state, loader) < 0) return nullptr;
-        query_capabilities(m);
+        if (load_gl(state, loader) < 0) {
+            return nullptr;
+        }
+        query_capabilities(mod);
     }
     Py_RETURN_NONE;
 }
@@ -96,145 +97,153 @@ PyCaravanGL_API caravan_init(PyObject *m, PyObject *const *args, Py_ssize_t narg
  * caravangl.context() -> dict
  * Returns a snapshot of capabilities and driver info using FastBuild.
  */
-PyCaravanGL_API caravan_context(PyObject *m, [[maybe_unused]] PyObject *args) {
-    WithCaravanGL(m, gl)
-    {
+static inline PyObject *build_context_dict(CaravanState *state, CaravanGLTable OpenGL) {
+    // 0 nesting here!
+    PyObject *caps = FastBuild_Dict("max_texture_size", state->ctx.caps.max_texture_size,
+                                    "max_samples", state->ctx.caps.max_samples, "support_compute",
+                                    state->ctx.caps.support_compute, "support_bindless",
+                                    state->ctx.caps.support_bindless);
+
+    PyObject *info = FastBuild_Dict("vendor", (const char *)OpenGL.GetString(GL_VENDOR), "renderer",
+                                    (const char *)OpenGL.GetString(GL_RENDERER), "version",
+                                    (const char *)OpenGL.GetString(GL_VERSION));
+
+    return FastBuild_Dict("caps", caps, "info", info, "viewport",
+                          FastBuild_Tuple(state->ctx.viewport.x, state->ctx.viewport.y,
+                                          state->ctx.viewport.w, state->ctx.viewport.h));
+}
+
+PyCaravanGL_API caravan_context(PyObject *mod, [[maybe_unused]] PyObject *args) {
+    WithCaravanGL(mod, gl) {
         if (gl.GetString == nullptr) {
             PyErr_SetString(PyExc_RuntimeError, "OpenGL not loaded. Call init() first.");
             return nullptr;
         }
 
-        return FastBuild_Dict("caps",
-                              FastBuild_Dict("max_texture_size", state->ctx.caps.max_texture_size,
-                                             "max_samples", state->ctx.caps.max_samples,
-                                             "support_compute", state->ctx.caps.support_compute,
-                                             "support_bindless", state->ctx.caps.support_bindless),
-                              "info",
-                              FastBuild_Dict("vendor", (const char *)gl.GetString(GL_VENDOR),
-                                             "renderer", (const char *)gl.GetString(GL_RENDERER),
-                                             "version", (const char *)gl.GetString(GL_VERSION)),
-                              "viewport",
-                              FastBuild_Tuple(state->ctx.viewport.x, state->ctx.viewport.y,
-                                              state->ctx.viewport.w, state->ctx.viewport.h));
+        // Complexity: 1 (the call) + depth penalty of the macro
+        return build_context_dict(state, gl);
     }
     return nullptr;
 }
 
 /**
  * caravangl.inspect(obj) -> dict | None
- * Returns a dictionary containing the internal OpenGL IDs and state of a Caravan object.
+ * Returns a dictionary containing the internal OpenGL IDs and state of a
+ * Caravan object.
  */
-PyCaravanGL_API caravan_inspect(PyObject *m, PyObject *arg) {
-    CaravanState *state = get_caravan_state(m);
-    if (!state) return nullptr;
+// --- Internal Inspection Helpers ---
 
-    PyTypeObject *type = Py_TYPE(arg);
+static inline PyObject *inspect_buffer(PyCaravanBuffer *buf) {
+    return FastBuild_Dict("type", "buffer", "id", (Py_ssize_t)buf->buf.id, "target",
+                          (Py_ssize_t)buf->buf.target, "size", (Py_ssize_t)buf->buf.size, "usage",
+                          (Py_ssize_t)buf->buf.usage);
+}
 
-    // -------------------------------------------------------------------------
-    // BUFFER
-    // -------------------------------------------------------------------------
-    if (type == state->BufferType) {
-        PyCaravanBuffer *b = (PyCaravanBuffer *)arg;
-        return FastBuild_Dict("type", (const char *)"buffer", "id", (long long)b->buf.id, "target",
-                              (long long)b->buf.target, "size", (long long)b->buf.size, "usage",
-                              (long long)b->buf.usage);
+static inline PyObject *inspect_pipeline(PyCaravanPipeline *pip) {
+    auto state_dict = FastBuild_Dict("depth_test", pip->render_state.depth_test_enabled,
+                                     "depth_write", pip->render_state.depth_write_mask,
+                                     "depth_func", (Py_ssize_t)pip->render_state.depth_func,
+                                     "blend", pip->render_state.blend_enabled);
+
+    auto params_dict = FastBuild_Dict("vertex_count", (Py_ssize_t)pip->params.vertex_count,
+                                      "instance_count", (Py_ssize_t)pip->params.instance_count,
+                                      "first_vertex", (Py_ssize_t)pip->params.first_vertex,
+                                      "base_instance", (Py_ssize_t)pip->params.base_instance);
+
+    return FastBuild_Dict("type", "pipeline", "program", (Py_ssize_t)pip->program, "vao",
+                          (Py_ssize_t)pip->vao, "topology", (Py_ssize_t)pip->topology, "index_type",
+                          (Py_ssize_t)pip->index_type, "render_state", state_dict, "draw_params",
+                          params_dict);
+}
+
+static inline PyObject *inspect_texture(PyCaravanTexture *tex) {
+    return FastBuild_Dict("type", "texture", "id", (Py_ssize_t)tex->tex.id, "target",
+                          (Py_ssize_t)tex->tex.target, "width", (Py_ssize_t)tex->tex.width,
+                          "height", (Py_ssize_t)tex->tex.height, "internal_format",
+                          (Py_ssize_t)tex->tex.internal_format);
+}
+
+static inline PyObject *inspect_uniform_batch(PyCaravanUniformBatch *bat) {
+    return FastBuild_Dict("type", "uniform_batch", "count", (Py_ssize_t)bat->header->count,
+                          "used_bytes", (Py_ssize_t)bat->current_payload_offset, "max_bytes",
+                          (Py_ssize_t)bat->max_payload_bytes);
+}
+
+// --- Main Dispatcher ---
+
+PyCaravanGL_API caravan_inspect(PyObject *mod, PyObject *arg) {
+    auto state = get_caravan_state(mod);
+    if (!state) {
+        [[clang::unlikely]] return nullptr;
     }
 
-    // -------------------------------------------------------------------------
-    // PIPELINE
-    // -------------------------------------------------------------------------
-    if (type == state->PipelineType) { // Assumes PipelineType is stored in CaravanState
-        PyCaravanPipeline *p = (PyCaravanPipeline *)arg;
+    auto typ = Py_TYPE(arg);
 
-        // Return a structured dictionary reflecting the exact C struct
-        return FastBuild_Dict("type", (const char *)"pipeline", "program", (long long)p->program,
-                              "vao", (long long)p->vao, "topology", (long long)p->topology,
-                              "index_type", (long long)p->index_type,
-
-                              "render_state",
-                              FastBuild_Dict("depth_test", p->render_state.depth_test_enabled,
-                                             "depth_write", p->render_state.depth_write_mask,
-                                             "depth_func", (long long)p->render_state.depth_func,
-                                             "blend", p->render_state.blend_enabled),
-
-                              "draw_params",
-                              FastBuild_Dict("vertex_count", (long long)p->params.vertex_count,
-                                             "instance_count", (long long)p->params.instance_count,
-                                             "first_vertex", (long long)p->params.first_vertex,
-                                             "base_instance", (long long)p->params.base_instance));
+    if (typ == state->BufferType) {
+        return inspect_buffer((PyCaravanBuffer *)arg);
+    }
+    if (typ == state->PipelineType) {
+        return inspect_pipeline((PyCaravanPipeline *)arg);
+    }
+    if (typ == state->TextureType) {
+        return inspect_texture((PyCaravanTexture *)arg);
+    }
+    if (typ == state->UniformBatchType) {
+        return inspect_uniform_batch((PyCaravanUniformBatch *)arg);
     }
 
-    if (type == state->ProgramType) {
-        PyCaravanProgram *p = (PyCaravanProgram *)arg;
-        return FastBuild_Dict("type", "program", "id", (long long)p->id);
+    if (typ == state->ProgramType) {
+        return FastBuild_Dict("type", "program", "id", (Py_ssize_t)((PyCaravanProgram *)arg)->id);
+    }
+    if (typ == state->VertexArrayType) {
+        return FastBuild_Dict("type", "vertex_array", "id",
+                              (Py_ssize_t)((PyCaravanVertexArray *)arg)->id);
     }
 
-    // ADDED: VertexArray Inspection
-    if (type == state->VertexArrayType) {
-        PyCaravanVertexArray *v = (PyCaravanVertexArray *)arg;
-        return FastBuild_Dict("type", "vertex_array", "id", (long long)v->id);
-    }
-
-    // ADDED: Texture Inspection
-    if (type == state->TextureType) {
-        PyCaravanTexture *t = (PyCaravanTexture *)arg;
-        return FastBuild_Dict("type", "texture", 
-                              "id", (long long)t->tex.id, 
-                              "target", (long long)t->tex.target,
-                              "width", (long long)t->tex.width,
-                              "height", (long long)t->tex.height,
-                              "internal_format", (long long)t->tex.internal_format);
-    }
-
-    // ADDED: UniformBatch Inspection (good for coverage)
-    if (type == state->UniformBatchType) {
-        PyCaravanUniformBatch *ub = (PyCaravanUniformBatch *)arg;
-        return FastBuild_Dict("type", "uniform_batch", 
-                              "count", (long long)ub->header->count,
-                              "used_bytes", (long long)ub->current_payload_offset,
-                              "max_bytes", (long long)ub->max_payload_bytes);
-    }
-
-    // If we don't recognize the object, return None natively.
     Py_RETURN_NONE;
 }
 
-PyCaravanGL_API caravan_clear(PyObject *m, PyObject *const *args, Py_ssize_t nargs,
+PyCaravanGL_API caravan_clear(PyObject *mod, PyObject *const *args, Py_ssize_t nargs,
                               PyObject *kwnames) {
-    WithCaravanGL(m, gl)
-    {
+    WithCaravanGL(mod, gl) {
         uint32_t mask = 0;
         void *targets[Clear_COUNT] = {[IDX_CLR_MASK] = &mask};
 
-        if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.ClearParser, targets))
+        if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.ClearParser, targets)) {
             return nullptr;
+        }
 
         gl.Clear(mask);
     }
     Py_RETURN_NONE;
 }
 
-PyCaravanGL_API caravan_clear_color(PyObject *m, PyObject *const *args, Py_ssize_t nargs,
+PyCaravanGL_API caravan_clear_color(PyObject *mod, PyObject *const *args, Py_ssize_t nargs,
                                     PyObject *kwnames) {
-    WithCaravanGL(m, gl)
-    {
-        float r = 0.0f, g = 0.0f, b = 0.0f, a = 1.0f;
-        void *targets[ClearColor_COUNT] = {
-            [IDX_CLR_C_R] = &r, [IDX_CLR_C_G] = &g, [IDX_CLR_C_B] = &b, [IDX_CLR_C_A] = &a};
+    WithCaravanGL(mod, gl) {
+        float red = 0.0f;
+        float green = 0.0f;
+        float blue = 0.0f;
+        float alpha = 1.0f;
+        void *targets[ClearColor_COUNT] = {[IDX_CLR_C_R] = &red,
+                                           [IDX_CLR_C_G] = &green,
+                                           [IDX_CLR_C_B] = &blue,
+                                           [IDX_CLR_C_A] = &alpha};
 
-        if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.ClearColorParser, targets))
+        if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.ClearColorParser, targets)) {
             return nullptr;
+        }
 
-        const GLfloat color[] = {r, g, b, a};
+        const GLfloat color[] = {red, green, blue, alpha};
         gl.ClearBufferfv(GL_COLOR, 0, color);
     }
     Py_RETURN_NONE;
 }
 
-PyCaravanGL_API caravan_enable_debug(PyObject *m, [[maybe_unused]] PyObject *args) {
+PyCaravanGL_API caravan_enable_debug([[maybe_unused]] PyObject *mod,
+                                     [[maybe_unused]] PyObject *args) {
 #if !defined(__APPLE__)
-    WithCaravanGL(m, gl)
-    {
+    WithCaravanGL(mod, gl) {
         if (!gl.DebugMessageCallback) {
             PyErr_SetString(PyExc_RuntimeError, "Debug Output not supported on this driver.");
             return nullptr;
@@ -243,8 +252,9 @@ PyCaravanGL_API caravan_enable_debug(PyObject *m, [[maybe_unused]] PyObject *arg
         // 1. Enable debug mode in the driver
         gl.Enable(GL_DEBUG_OUTPUT);
 
-        // 2. Force synchronous calls. This blocks the CPU until the callback finishes.
-        // It makes performance worse, but gives you highly accurate error call-stacks.
+        // 2. Force synchronous calls. This blocks the CPU until the callback
+        // finishes. It makes performance worse, but gives you highly accurate error
+        // call-stacks.
         gl.Enable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
 
         // 3. Register the callback and pass 'state' as the userParam
@@ -255,13 +265,15 @@ PyCaravanGL_API caravan_enable_debug(PyObject *m, [[maybe_unused]] PyObject *arg
         // Enable everything by default
         gl.DebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
 
-        // Example: Disable "Notification" level spam (like buffer memory placement info)
+        // Example: Disable "Notification" level spam (like buffer memory placement
+        // info)
         gl.DebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0,
                                nullptr, GL_FALSE);
 
         // Example: If you wanted to disable specific driver error IDs manually:
         // GLuint skip_ids[] = { 1234, 5678 };
-        // gl.DebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 2, skip_ids, GL_FALSE);
+        // gl.DebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 2,
+        // skip_ids, GL_FALSE);
     }
     Py_RETURN_NONE;
 #else
@@ -270,7 +282,7 @@ PyCaravanGL_API caravan_enable_debug(PyObject *m, [[maybe_unused]] PyObject *arg
 #endif
 }
 
-static PyMethodDef caravan_methods[] = {
+static const PyMethodDef caravan_methods[] = {
     {"init", (PyCFunction)(void (*)(void))caravan_init, METH_FASTCALL | METH_KEYWORDS,
      "Initialize loader"},
     {"enable_debug", (PyCFunction)caravan_enable_debug, METH_NOARGS, "Enable GL Debug Output"},
@@ -290,8 +302,9 @@ static PyMethodDef caravan_methods[] = {
  * Internal helpers for module initialization.
  */
 
-static int init_types(PyObject *m, CaravanState *state) {
+static int init_types(PyObject *mod, CaravanState *state) {
     struct {
+        [[gnu::aligned(32)]]
         const PyType_Spec *spec;
         PyObject **slot;
         const char *name;
@@ -305,10 +318,12 @@ static int init_types(PyObject *m, CaravanState *state) {
     };
 
     auto mod_name = PyUnicode_FromString("caravangl");
-    if (!mod_name) return -1;
-
+    if (!mod_name) {
+        return -1;
+    }
+#pragma unroll 4
     for (size_t i = 0; i < sizeof(types) / sizeof(types[0]); i++) {
-        auto type = PyType_FromModuleAndSpec(m, (PyType_Spec *)types[i].spec, nullptr);
+        auto type = PyType_FromModuleAndSpec(mod, (PyType_Spec *)types[i].spec, nullptr);
         if (!type) {
             Py_DECREF(mod_name);
             return -1;
@@ -318,7 +333,7 @@ static int init_types(PyObject *m, CaravanState *state) {
         PyObject_SetAttrString(type, "__module__", mod_name);
 
         // Add to module (PyModule_AddObjectRef is CPython 3.10+ and safer)
-        if (PyModule_AddObjectRef(m, types[i].name, type) < 0) {
+        if (PyModule_AddObjectRef(mod, types[i].name, type) < 0) {
             Py_DECREF(type);
             Py_DECREF(mod_name);
             return -1;
@@ -333,8 +348,9 @@ static int init_types(PyObject *m, CaravanState *state) {
     return 0;
 }
 
-static int init_constants(PyObject *m) {
+static int init_constants(PyObject *mod) {
     static const struct {
+        [[gnu::aligned(16)]]
         const char *name;
         long value;
     } consts[] = {{"FLOAT", GL_FLOAT},
@@ -346,9 +362,9 @@ static int init_constants(PyObject *m) {
                   {"UF_4F", UF_4F},
                   {"UF_MAT4", UF_MAT4},
                   {"ELEMENT_ARRAY_BUFFER", GL_ELEMENT_ARRAY_BUFFER},
-                    {"UNSIGNED_SHORT", GL_UNSIGNED_SHORT},
-                    {"UNSIGNED_INT", GL_UNSIGNED_INT},
-                    {"UNSIGNED_BYTE", GL_UNSIGNED_BYTE},
+                  {"UNSIGNED_SHORT", GL_UNSIGNED_SHORT},
+                  {"UNSIGNED_INT", GL_UNSIGNED_INT},
+                  {"UNSIGNED_BYTE", GL_UNSIGNED_BYTE},
 
                   // Build Metadata
                   {"FREE_THREADED",
@@ -365,9 +381,9 @@ static int init_constants(PyObject *m) {
                    0
 #endif
                   }};
-
+#pragma unroll
     for (size_t i = 0; i < sizeof(consts) / sizeof(consts[0]); i++) {
-        if (PyModule_AddIntConstant(m, consts[i].name, consts[i].value) < 0) {
+        if (PyModule_AddIntConstant(mod, consts[i].name, consts[i].value) < 0) {
             return -1;
         }
     }
@@ -378,51 +394,103 @@ static int init_constants(PyObject *m) {
 // Module Lifecycle Implementation
 // -----------------------------------------------------------------------------
 
-PyCaravanGL_Status caravan_exec(PyObject *m) {
-    CaravanState *state = get_caravan_state(m);
-    if (state == nullptr) return -1;
+PyCaravanGL_Status caravan_exec(PyObject *mod) {
+    CaravanState *state = get_caravan_state(mod);
+    if (state == nullptr) {
+        return -1;
+    }
 
     // Zero out state and prepare fast-path parsers
     memset(state, 0, sizeof(CaravanState));
     caravan_init_parsers(&state->parsers);
 
     // Register Classes
-    if (init_types(m, state) < 0) return -1;
+    if (init_types(mod, state) < 0) {
+        return -1;
+    }
 
     // Register Constants
-    if (init_constants(m) < 0) return -1;
+    if (init_constants(mod) < 0) {
+        return -1;
+    }
 
     return 0;
 }
 
-PyCaravanGL_Status caravan_traverse(PyObject *m, visitproc visit, void *arg) {
-    CaravanState *state = get_caravan_state(m);
-    if (state) {
-        Py_VISIT(state->BufferType);
-        Py_VISIT(state->PipelineType);
-        Py_VISIT(state->ProgramType);
-        Py_VISIT(state->VertexArrayType);
-        Py_VISIT(state->UniformBatchType);
-        Py_VISIT(state->TextureType);
+[[nodiscard, gnu::always_inline]]
+static inline int caravan_visit(PyTypeObject *obj, visitproc visit, void *arg) {
+    if (obj) {
+        int res = visit((PyObject *)obj, arg);
+        if (res) {
+            return res;
+        }
     }
     return 0;
 }
 
-PyCaravanGL_Status py_caravan_clear(PyObject *m) {
-    CaravanState *state = get_caravan_state(m);
-    if (state) {
-        caravan_free_parsers(&state->parsers);
-        Py_CLEAR(state->BufferType);
-        Py_CLEAR(state->PipelineType);
-        Py_CLEAR(state->ProgramType);
-        Py_CLEAR(state->VertexArrayType);
-        Py_CLEAR(state->UniformBatchType);
-        Py_CLEAR(state->TextureType);
+[[gnu::always_inline]]
+static inline void py_caravan_clear(PyTypeObject **ptr) {
+    // We take the address of the pointer so we can null it out
+    PyTypeObject *tmp = *ptr;
+    if (tmp != nullptr) {
+        *ptr = nullptr;
+        Py_DECREF(tmp);
+    }
+}
+
+// A generic function pointer type for operating on your state members
+typedef int (*caravan_op_t)(PyTypeObject **ptr, void *data);
+
+[[gnu::always_inline]]
+static inline int caravan_dispatch(CaravanState *state, caravan_op_t op, void *data) {
+    // Single source of truth for all managed types
+    PyTypeObject **members[] = {
+        &state->BufferType,      &state->PipelineType,     &state->ProgramType,
+        &state->VertexArrayType, &state->UniformBatchType, &state->TextureType,
+    };
+
+#pragma unroll
+    for (size_t i = 0; i < sizeof(members) / sizeof(members[0]); ++i) {
+        int res = op(members[i], data);
+        if (res) {
+            return res;
+        }
     }
     return 0;
 }
 
-static PyModuleDef_Slot caravan_slots[] = {
+static int op_visit(PyTypeObject **ptr, void *arg) {
+    // We reuse your existing caravan_visit logic
+    return caravan_visit(*ptr, (visitproc)((void **)arg)[0], ((void **)arg)[1]);
+}
+
+static int op_clear(PyTypeObject **ptr, [[maybe_unused]] void *unused) {
+    py_caravan_clear(ptr);
+    return 0;
+}
+
+PyCaravanGL_Status caravan_traverse(PyObject *mod, visitproc visit, void *arg) {
+    CaravanState *state = get_caravan_state(mod);
+    if (!state) {
+        return 0;
+    }
+
+    // Package visit and arg to pass through the dispatcher
+    void *params[] = {(void *)visit, arg};
+    return caravan_dispatch(state, op_visit, (void *)params);
+}
+
+PyCaravanGL_Status slot_caravan_clear(PyObject *mod) {
+    CaravanState *state = get_caravan_state(mod);
+    if (!state) {
+        return 0;
+    }
+
+    caravan_free_parsers(&state->parsers);
+    return caravan_dispatch(state, op_clear, nullptr);
+}
+
+static const PyModuleDef_Slot caravan_slots[] = {
     {Py_mod_exec, caravan_exec},
     {Py_mod_multiple_interpreters, Py_MOD_PER_INTERPRETER_GIL_SUPPORTED},
 #ifdef Py_mod_gil
@@ -430,16 +498,19 @@ static PyModuleDef_Slot caravan_slots[] = {
 #endif
     {}};
 
-static struct PyModuleDef caravan_module = {
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+static PyModuleDef caravan_module = {
     PyModuleDef_HEAD_INIT,
     .m_name = "caravangl",
     .m_doc = "CaravanGL: Modern Isolated OpenGL Context",
     .m_size = sizeof(CaravanState),
-    .m_methods = caravan_methods,
-    .m_slots = caravan_slots,
+    .m_methods = (PyMethodDef *)caravan_methods,
+    .m_slots = (PyModuleDef_Slot *)caravan_slots,
     .m_traverse = caravan_traverse,
-    .m_clear = py_caravan_clear,
+    .m_clear = slot_caravan_clear,
     .m_free = nullptr,
 };
 
-PyMODINIT_FUNC PyInit_caravangl(void) { return PyModuleDef_Init(&caravan_module); }
+extern PyMODINIT_FUNC PyInit_caravangl(void) {
+    return PyModuleDef_Init(&caravan_module);
+}

@@ -9,10 +9,9 @@
  */
 PyCaravanGL_Slot Buffer_dealloc(PyCaravanBuffer *self) {
     PyTypeObject *tp = Py_TYPE(self);
-    PyObject *m = PyType_GetModule(tp);
+    PyObject *mod = PyType_GetModule(tp);
 
-    WithCaravanGL(m, gl)
-    {
+    WithCaravanGL(mod, gl) {
         if (self->buf.id != 0) {
             gl.DeleteBuffers(1, &self->buf.id);
             self->buf.id = 0;
@@ -32,17 +31,16 @@ PyCaravanGL_Slot Buffer_dealloc(PyCaravanBuffer *self) {
  * Signature: (self, args, kwds) -> Standard tp_init
  */
 PyCaravanGL_Status Buffer_init(PyCaravanBuffer *self, PyObject *args, PyObject *kwds) {
-    PyObject *m = PyType_GetModule(Py_TYPE(self));
+    PyObject *mod = PyType_GetModule(Py_TYPE(self));
 
-    WithCaravanGL(m, gl)
-    {
+    WithCaravanGL(mod, gl) {
         int size = 0;
         PyObject *data = nullptr;
         uint32_t target = GL_ARRAY_BUFFER;
         uint32_t usage = GL_STATIC_DRAW;
 
         void *targets[BufInit_COUNT] = {[IDX_BUF_SIZE] = &size,
-                                        [IDX_BUF_DATA] = &data,
+                                        [IDX_BUF_DATA] = (void *)&data,
                                         [IDX_BUF_TARGET] = &target,
                                         [IDX_BUF_USAGE] = &usage};
 
@@ -65,7 +63,9 @@ PyCaravanGL_Status Buffer_init(PyCaravanBuffer *self, PyObject *args, PyObject *
         }
 
         gl.BufferData(target, (GLsizeiptr)size, ptr, usage);
-        if (ptr) PyBuffer_Release(&view);
+        if (ptr) {
+            PyBuffer_Release(&view);
+        }
 
         self->buf.target = target;
         self->buf.size = (GLsizeiptr)size;
@@ -79,14 +79,13 @@ PyCaravanGL_Status Buffer_init(PyCaravanBuffer *self, PyObject *args, PyObject *
  * Signature: (self, args, nargs, kwnames) -> FastCall
  */
 PyCaravanGL_API Buffer_write(PyCaravanBuffer *self, PyObject *const *args, Py_ssize_t nargs,
-                              PyObject *kwnames) {
-    PyObject *m = PyType_GetModule(Py_TYPE(self));
+                             PyObject *kwnames) {
+    PyObject *mod = PyType_GetModule(Py_TYPE(self));
 
-    WithCaravanGL(m, gl)
-    {
+    WithCaravanGL(mod, gl) {
         PyObject *data = nullptr;
         int offset = 0;
-        void *targets[BufWrite_COUNT] = {[IDX_BUF_WRITE_DATA] = &data,
+        void *targets[BufWrite_COUNT] = {[IDX_BUF_WRITE_DATA] = (void *)&data,
                                          [IDX_BUF_WRITE_OFFSET] = &offset};
 
         if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.BufWriteParser, targets)) {
@@ -117,11 +116,10 @@ PyCaravanGL_API Buffer_write(PyCaravanBuffer *self, PyObject *const *args, Py_ss
  * Signature: (self, args, nargs, kwnames) -> FastCall
  */
 PyCaravanGL_API Buffer_bind_base(PyCaravanBuffer *self, PyObject *const *args, Py_ssize_t nargs,
-                                  PyObject *kwnames) {
-    PyObject *m = PyType_GetModule(Py_TYPE(self));
+                                 PyObject *kwnames) {
+    PyObject *mod = PyType_GetModule(Py_TYPE(self));
 
-    WithCaravanGL(m, gl)
-    {
+    WithCaravanGL(mod, gl) {
         uint32_t index = 0;
         void *targets[BufBind_COUNT] = {[IDX_BUF_BIND_IDX] = &index};
 
@@ -133,22 +131,24 @@ PyCaravanGL_API Buffer_bind_base(PyCaravanBuffer *self, PyObject *const *args, P
     Py_RETURN_NONE;
 }
 
-PyMethodDef Buffer_methods[] = {{"write", (PyCFunction)(void (*)(void))Buffer_write,
-                                        METH_FASTCALL | METH_KEYWORDS, "Write data to buffer."},
-                                       {"bind_base", (PyCFunction)(void (*)(void))Buffer_bind_base,
-                                        METH_FASTCALL | METH_KEYWORDS, "Bind as indexed resource."},
-                                       {nullptr}};
+static const PyMethodDef Buffer_methods[] = {
+    {"write", (PyCFunction)(void (*)(void))Buffer_write, METH_FASTCALL | METH_KEYWORDS,
+     "Write data to buffer."},
+    {"bind_base", (PyCFunction)(void (*)(void))Buffer_bind_base, METH_FASTCALL | METH_KEYWORDS,
+     "Bind as indexed resource."},
+    {}};
 
-PyType_Slot Buffer_slots[] = {{Py_tp_init, Buffer_init},
-                                     {Py_tp_dealloc, Buffer_dealloc},
-                                     {Py_tp_methods, Buffer_methods},
-                                     {Py_tp_doc, "CaravanGL Buffer Object (VBO, IBO, UBO)"},
-                                     {0, nullptr}};
+static const PyType_Slot Buffer_slots[] = {{Py_tp_init, Buffer_init},
+                                           {Py_tp_dealloc, Buffer_dealloc},
+                                           {Py_tp_methods, (PyMethodDef *)Buffer_methods},
+                                           {Py_tp_doc, "CaravanGL Buffer Object (VBO, IBO, UBO)"},
+                                           {}};
 
-PyType_Spec Buffer_spec = {
+// NOLINTNEXTLINE(misc-use-internal-linkage)
+const PyType_Spec Buffer_spec = {
     .name = "caravangl.Buffer",
     .basicsize = sizeof(PyCaravanBuffer),
     .itemsize = 0,
     .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
-    .slots = Buffer_slots,
+    .slots = (PyType_Slot *)Buffer_slots,
 };

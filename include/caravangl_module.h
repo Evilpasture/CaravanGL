@@ -1,6 +1,6 @@
 #pragma once
-#include <Python.h>
 #include "caravangl_specs.h"
+#include <Python.h>
 
 #include "caravangl_arg_indices.h"
 
@@ -41,7 +41,7 @@ typedef struct CaravanState {
     PyTypeObject *ProgramType;
     PyTypeObject *VertexArrayType;
     PyTypeObject *UniformBatchType;
-    PyTypeObject *TextureType; 
+    PyTypeObject *TextureType;
     PyObject *CaravanError;
     CaravanContext ctx;
     CaravanGLTable gl;
@@ -56,12 +56,16 @@ static inline CaravanState *get_caravan_state(PyObject *m) {
     return (CaravanState *)PyModule_GetState(m);
 }
 
-static inline CaravanGLTable gl_table(PyObject *m) { return get_caravan_state(m)->gl; }
+static inline CaravanGLTable gl_table(PyObject *m) {
+    return get_caravan_state(m)->gl;
+}
 
 #define WithCaravanGL(module_ptr, gl_name)                                                         \
     for (PyObject *_cv_m = (PyObject *)(module_ptr); _cv_m != nullptr; _cv_m = nullptr)            \
-        for (CaravanState *state = get_caravan_state(_cv_m); state != nullptr; state = nullptr)    \
-            for (CaravanGLTable gl_name = state->gl; _cv_m != nullptr; _cv_m = nullptr)
+    _Pragma("unroll 4") for (CaravanState *state = get_caravan_state(_cv_m); state != nullptr;     \
+                             state = nullptr)                                                      \
+        _Pragma("unroll 4") for (CaravanGLTable gl_name = state->gl; _cv_m != nullptr;             \
+                                 _cv_m = nullptr)
 
 #ifdef NDEBUG
 /* --- RELEASE MODE: High Performance, No Stalls --- */
@@ -100,14 +104,9 @@ static inline CaravanGLTable gl_table(PyObject *m) { return get_caravan_state(m)
 #endif
 
 #if !defined(__APPLE__)
-static void APIENTRY opengl_debug_callback(GLenum source, 
-                                          GLenum type, 
-                                          GLuint id, 
-                                          GLenum severity, 
-                                          GLsizei length, 
-                                          const GLchar* message, 
-                                          const void* userParam) 
-{
+static void APIENTRY opengl_debug_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
+                                           GLsizei length, const GLchar *message,
+                                           const void *userParam) {
     // userParam is the 'state' pointer we passed to DebugMessageCallback.
     // This allows access to module state without global variables!
     // [[maybe_unused]] CaravanState* state = (CaravanState*)userParam;
@@ -120,40 +119,73 @@ static void APIENTRY opengl_debug_callback(GLenum source,
     };
 
     for (size_t i = 0; i < sizeof(ignore_list) / sizeof(GLuint); ++i) {
-        if (id == ignore_list[i]) return;
+        if (id == ignore_list[i])
+            return;
     }
 
-    const char* _src = "Unknown";
-    const char* _typ = "Unknown";
-    const char* _sev = "Unknown";
+    const char *_src = "Unknown";
+    const char *_typ = "Unknown";
+    const char *_sev = "Unknown";
 
     switch (source) {
-        case GL_DEBUG_SOURCE_API:             _src = "API"; break;
-        case GL_DEBUG_SOURCE_WINDOW_SYSTEM:   _src = "Window System"; break;
-        case GL_DEBUG_SOURCE_SHADER_COMPILER: _src = "Shader Compiler"; break;
-        case GL_DEBUG_SOURCE_THIRD_PARTY:     _src = "Third Party"; break;
-        case GL_DEBUG_SOURCE_APPLICATION:     _src = "Application"; break;
-        case GL_DEBUG_SOURCE_OTHER:           _src = "Other"; break;
+    case GL_DEBUG_SOURCE_API:
+        _src = "API";
+        break;
+    case GL_DEBUG_SOURCE_WINDOW_SYSTEM:
+        _src = "Window System";
+        break;
+    case GL_DEBUG_SOURCE_SHADER_COMPILER:
+        _src = "Shader Compiler";
+        break;
+    case GL_DEBUG_SOURCE_THIRD_PARTY:
+        _src = "Third Party";
+        break;
+    case GL_DEBUG_SOURCE_APPLICATION:
+        _src = "Application";
+        break;
+    case GL_DEBUG_SOURCE_OTHER:
+        _src = "Other";
+        break;
     }
 
     switch (type) {
-        case GL_DEBUG_TYPE_ERROR:               _typ = "Error"; break;
-        case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: _typ = "Deprecated"; break;
-        case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:  _typ = "Undefined Behavior"; break;
-        case GL_DEBUG_TYPE_PORTABILITY:         _typ = "Portability"; break;
-        case GL_DEBUG_TYPE_PERFORMANCE:         _typ = "Performance"; break;
-        case GL_DEBUG_TYPE_OTHER:               _typ = "Other"; break;
+    case GL_DEBUG_TYPE_ERROR:
+        _typ = "Error";
+        break;
+    case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR:
+        _typ = "Deprecated";
+        break;
+    case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR:
+        _typ = "Undefined Behavior";
+        break;
+    case GL_DEBUG_TYPE_PORTABILITY:
+        _typ = "Portability";
+        break;
+    case GL_DEBUG_TYPE_PERFORMANCE:
+        _typ = "Performance";
+        break;
+    case GL_DEBUG_TYPE_OTHER:
+        _typ = "Other";
+        break;
     }
 
     switch (severity) {
-        case GL_DEBUG_SEVERITY_HIGH:         _sev = "HIGH"; break;
-        case GL_DEBUG_SEVERITY_MEDIUM:       _sev = "MEDIUM"; break;
-        case GL_DEBUG_SEVERITY_LOW:          _sev = "LOW"; break;
-        case GL_DEBUG_SEVERITY_NOTIFICATION: _sev = "INFO"; break;
+    case GL_DEBUG_SEVERITY_HIGH:
+        _sev = "HIGH";
+        break;
+    case GL_DEBUG_SEVERITY_MEDIUM:
+        _sev = "MEDIUM";
+        break;
+    case GL_DEBUG_SEVERITY_LOW:
+        _sev = "LOW";
+        break;
+    case GL_DEBUG_SEVERITY_NOTIFICATION:
+        _sev = "INFO";
+        break;
     }
 
-    // Using raw fprintf because this callback might be triggered by a driver thread 
-    // where holding the Python GIL is not guaranteed.
+    // Using raw fprintf because this callback might be triggered by a driver
+    // thread where holding the Python GIL is not guaranteed.
     fprintf(stderr, "[CaravanGL] %s | %s [%s] (ID: %u): %s\n", _src, _typ, _sev, id, message);
 }
 #endif

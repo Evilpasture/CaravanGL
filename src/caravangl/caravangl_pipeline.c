@@ -2,10 +2,9 @@
 #include "pycaravangl.h"
 
 PyCaravanGL_Status Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObject *kwds) {
-    PyObject *m = PyType_GetModule(Py_TYPE(self));
+    PyObject *module = PyType_GetModule(Py_TYPE(self));
 
-    WithCaravanGL(m, gl)
-    {
+    WithCaravanGL(module, gl) {
         // Variables to parse into
         PyObject *py_program = nullptr;
         PyObject *py_vao = nullptr;
@@ -13,15 +12,16 @@ PyCaravanGL_Status Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObje
         uint32_t index_type = 0; // 0 means draw arrays (no index buffer)
 
         // Render State defaults
-        int depth_test = 0, depth_write = 1;
+        int depth_test = 0;
+        int depth_write = 1;
         uint32_t depth_func = GL_LESS;
         int blend_enabled = 0;
 
         void *targets[PipelineInit_COUNT] = {
-            [IDX_PL_PROGRAM] = &py_program, [IDX_PL_VAO] = &py_vao,
-            [IDX_PL_TOPO] = &topology,      [IDX_PL_IDX_TYP] = &index_type,
-            [IDX_PL_DEPTH] = &depth_test,   [IDX_PL_DWRITE] = &depth_write,
-            [IDX_PL_DFUNC] = &depth_func,   [IDX_PL_BLEND] = &blend_enabled};
+            [IDX_PL_PROGRAM] = (void *)&py_program, [IDX_PL_VAO] = (void *)&py_vao,
+            [IDX_PL_TOPO] = (void *)(&topology),    [IDX_PL_IDX_TYP] = (void *)(&index_type),
+            [IDX_PL_DEPTH] = (void *)(&depth_test), [IDX_PL_DWRITE] = (void *)(&depth_write),
+            [IDX_PL_DFUNC] = (void *)(&depth_func), [IDX_PL_BLEND] = (void *)&blend_enabled};
 
         if (!FastParse_Unified(args, kwds, nullptr, &state->parsers.PipelineInitParser, targets)) {
             return -1;
@@ -80,14 +80,15 @@ PyCaravanGL_Status Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObje
 
 PyCaravanGL_API Pipeline_upload_uniforms(PyCaravanPipeline *self, PyObject *const *args,
                                          Py_ssize_t nargs, PyObject *kwnames) {
-    PyObject *m = PyType_GetModule(Py_TYPE(self));
-    CaravanState *state = get_caravan_state(m);
+    PyObject *mod = PyType_GetModule(Py_TYPE(self));
+    CaravanState *state = get_caravan_state(mod);
 
     PyObject *py_batch = nullptr;
-    void *targets[PipelineUniforms_COUNT] = {[IDX_PL_U_BATCH] = &py_batch};
+    void *targets[PipelineUniforms_COUNT] = {[IDX_PL_U_BATCH] = (void *)&py_batch};
 
-    if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.PipelineUniformsParser, targets))
+    if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.PipelineUniformsParser, targets)) {
         return nullptr;
+    }
 
     if (Py_TYPE(py_batch) != state->UniformBatchType) {
         PyErr_SetString(PyExc_TypeError, "Expected UniformBatch object.");
@@ -96,20 +97,17 @@ PyCaravanGL_API Pipeline_upload_uniforms(PyCaravanPipeline *self, PyObject *cons
 
     PyCaravanUniformBatch *batch = (PyCaravanUniformBatch *)py_batch;
 
-    WithCaravanGL(m, gl)
-    {
+    WithCaravanGL(mod, gl) {
         cv_bind_program(state, self->program);
         cv_upload_uniform_batch(state, batch->header, batch->payload);
     }
     Py_RETURN_NONE;
 }
 
-PyCaravanGL_API Pipeline_draw(PyCaravanPipeline *self, PyObject *const *args, Py_ssize_t nargs,
-                              PyObject *kwnames) {
-    PyObject *m = PyType_GetModule(Py_TYPE(self));
+PyCaravanGL_API Pipeline_draw(PyCaravanPipeline *self, [[maybe_unused]] PyObject *args) {
+    PyObject *mod = PyType_GetModule(Py_TYPE(self));
 
-    WithCaravanGL(m, gl)
-    {
+    WithCaravanGL(mod, gl) {
         // 0. Predictable Early-Out: If vertex or instance count is 0, do nothing.
         if (self->params.vertex_count == 0 || self->params.instance_count == 0)
             [[clang::unlikely]] {
@@ -145,24 +143,30 @@ PyCaravanGL_API Pipeline_draw(PyCaravanPipeline *self, PyObject *const *args, Py
             case GL_UNSIGNED_BYTE:
                 byte_offset = self->params.first_vertex * sizeof(GLubyte);
                 break;
+            default:
+                byte_offset = 0;
+                break;
             }
-            void *index_ptr = (void *)byte_offset;
+            void *index_ptr = (char *)0 + byte_offset;
 
             if (self->params.instance_count > 1) {
-                gl.DrawElementsInstanced(self->topology, self->params.vertex_count,
-                                         self->index_type, index_ptr, self->params.instance_count);
+                gl.DrawElementsInstanced(self->topology, (GLsizei)self->params.vertex_count,
+                                         self->index_type, index_ptr,
+                                         (GLsizei)self->params.instance_count);
             } else {
-                gl.DrawElements(self->topology, self->params.vertex_count, self->index_type,
-                                index_ptr);
+                gl.DrawElements(self->topology, (GLsizei)self->params.vertex_count,
+                                self->index_type, index_ptr);
             }
         } else {
             // Array Drawing (glDrawArrays)
 
             if (self->params.instance_count > 1) {
-                gl.DrawArraysInstanced(self->topology, self->params.first_vertex,
-                                       self->params.vertex_count, self->params.instance_count);
+                gl.DrawArraysInstanced(self->topology, (GLsizei)self->params.first_vertex,
+                                       (GLsizei)self->params.vertex_count,
+                                       (GLsizei)self->params.instance_count);
             } else {
-                gl.DrawArrays(self->topology, self->params.first_vertex, self->params.vertex_count);
+                gl.DrawArrays(self->topology, (GLsizei)self->params.first_vertex,
+                              (GLsizei)self->params.vertex_count);
             }
         }
 
@@ -212,36 +216,38 @@ PyCaravanGL_Slot Pipeline_dealloc(PyCaravanPipeline *self) {
 /**
  * Getter for .params: Exposes the memoryview for zero-copy mutation
  */
-PyCaravanGL_API Pipeline_get_params(PyCaravanPipeline *self, void *closure) {
+PyCaravanGL_API Pipeline_get_params(PyCaravanPipeline *self, [[maybe_unused]] void *closure) {
     if (self->params_view) {
         return Py_NewRef(self->params_view);
     }
     Py_RETURN_NONE;
 }
 
-PyGetSetDef Pipeline_getset[] = {
+static const PyGetSetDef Pipeline_getset[] = {
     {"params", (getter)Pipeline_get_params, nullptr, "Direct access to draw parameters", nullptr},
     {}};
 
-PyMethodDef Pipeline_methods[] = {
+static const PyMethodDef Pipeline_methods[] = {
     {"upload_uniforms", (PyCFunction)(void (*)(void))Pipeline_upload_uniforms,
      METH_FASTCALL | METH_KEYWORDS, nullptr},
     {"draw", (PyCFunction)(void (*)(void))Pipeline_draw, METH_NOARGS, "Execute the draw call."},
     {}};
 
-PyType_Slot Pipeline_slots[] = {{Py_tp_init, Pipeline_init},
-                                {Py_tp_dealloc, Pipeline_dealloc},
-                                {Py_tp_traverse, Pipeline_traverse},
-                                {Py_tp_clear, Pipeline_clear},
-                                {Py_tp_methods, Pipeline_methods},
-                                {Py_tp_getset, Pipeline_getset},
-                                {Py_tp_doc, "CaravanGL Pipeline: Immutable Draw State"},
-                                {}};
+static const PyType_Slot Pipeline_slots[] = {
+    {Py_tp_init, Pipeline_init},
+    {Py_tp_dealloc, Pipeline_dealloc},
+    {Py_tp_traverse, Pipeline_traverse},
+    {Py_tp_clear, Pipeline_clear},
+    {Py_tp_methods, (PyMethodDef *)Pipeline_methods},
+    {Py_tp_getset, (PyGetSetDef *)Pipeline_getset},
+    {Py_tp_doc, "CaravanGL Pipeline: Immutable Draw State"},
+    {}};
 
-PyType_Spec Pipeline_spec = {
+// NOLINTNEXTLINE(misc-use-internal-linkage)
+const PyType_Spec Pipeline_spec = {
     .name = "caravangl.Pipeline",
     .basicsize = sizeof(PyCaravanPipeline),
     .itemsize = 0,
     .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,
-    .slots = Pipeline_slots,
+    .slots = (PyType_Slot *)Pipeline_slots,
 };

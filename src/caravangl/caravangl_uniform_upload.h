@@ -6,7 +6,7 @@ typedef struct CaravanUniformBinding {
     uint8_t function_id; // Maps to UF_COUNT (e.g., UF_MAT4)
     GLint location;
     GLsizei count;
-    uint32_t offset;     // Byte offset inside the data payload
+    uint32_t offset; // Byte offset inside the data payload
 } CaravanUniformBinding;
 
 typedef struct CaravanUniformHeader {
@@ -18,25 +18,26 @@ typedef struct CaravanUniformHeader {
  * Executes a batch of uniform uploads using the function pointer table.
  */
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_upload_uniform_batch(CaravanState *s, 
-                                           const void *header_buffer, 
-                                           const void *data_payload) 
-{
+static inline void cv_upload_uniform_batch(CaravanState *state, const void *header_buffer,
+                                           const void *data_payload) {
     const CaravanUniformHeader *header = (const CaravanUniformHeader *)header_buffer;
     const char *data = (const char *)data_payload;
-
+#pragma unroll 4
     for (uint32_t i = 0; i < header->count; ++i) {
-        const CaravanUniformBinding *b = &header->bindings[i];
-        const void *ptr = data + b->offset;
+        const CaravanUniformBinding *binding = &header->bindings[i];
+        const void *ptr = data + binding->offset;
 
-        if (b->function_id < UF_COUNT) [[clang::likely]] {
-            UniformUploadFn func = uniform_upload_table[b->function_id];
+        if (binding->function_id < UF_COUNT) [[clang::likely]] {
+            UniformUploadFn func = uniform_upload_table[binding->function_id];
             if (func != nullptr) [[clang::likely]] {
-                func(s, b->location, b->count, ptr);
+                func(state, binding->location, binding->count, ptr);
             }
         } else {
 #ifndef NDEBUG
-            fprintf(stderr, "[CaravanGL] Invalid uniform function ID: %d\n", b->function_id);
+            if (fprintf(stderr, "[CaravanGL] Invalid uniform function ID: %d\n",
+                        binding->function_id) < 0) {
+                // the world has ended
+            }
 #endif
         }
     }

@@ -8,3 +8,4 @@ dist/
 compile_commands.json
 __pycache__/
 .cache/
+uv.lock

@@ -13,7 +13,7 @@ PyCaravanGL_Status Texture_init(PyCaravanTexture *self, PyObject *args, PyObject
 
         gl.GenTextures(1, &self->tex.id);
         self->tex.target = target;
-        
+
         // Setup sane defaults for 3.3 Core (Requires this or incomplete texture error)
         gl.BindTexture(target, self->tex.id);
         gl.TexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -39,21 +39,31 @@ PyCaravanGL_Slot Texture_dealloc(PyCaravanTexture *self) {
     Py_DECREF(tp);
 }
 
-PyCaravanGL_API Texture_upload(PyCaravanTexture *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames) {
+PyCaravanGL_API Texture_upload(PyCaravanTexture *self, PyObject *const *args, Py_ssize_t nargs,
+                               PyObject *kwnames) {
     PyObject *m = PyType_GetModule(Py_TYPE(self));
     WithCaravanGL(m, gl) {
-        int level = 0, width = 0, height = 0, depth = 0;
-        uint32_t internal_format = 0, format = 0, type = 0;
+        int level = 0;
+        int width = 0;
+        int height = 0;
+        int depth = 0;
+        uint32_t internal_format = 0;
+        uint32_t format = 0;
+        uint32_t type = 0;
         PyObject *py_data = nullptr;
 
-        void *targets[TexUpload_COUNT] = {
-            [IDX_TEX_UPL_LEVEL] = &level, [IDX_TEX_UPL_W] = &width,
-            [IDX_TEX_UPL_H] = &height,    [IDX_TEX_UPL_D] = &depth,
-            [IDX_TEX_UPL_IFMT] = &internal_format, [IDX_TEX_UPL_FMT] = &format,
-            [IDX_TEX_UPL_TYPE] = &type,   [IDX_TEX_UPL_DATA] = &py_data
-        };
+        void *targets[TexUpload_COUNT] = {[IDX_TEX_UPL_LEVEL] = (void *)(&level),
+                                          [IDX_TEX_UPL_W] = (void *)(&width),
+                                          [IDX_TEX_UPL_H] = (void *)(&height),
+                                          [IDX_TEX_UPL_D] = (void *)(&depth),
+                                          [IDX_TEX_UPL_IFMT] = (void *)(&internal_format),
+                                          [IDX_TEX_UPL_FMT] = (void *)(&format),
+                                          [IDX_TEX_UPL_TYPE] = (void *)(&type),
+                                          [IDX_TEX_UPL_DATA] = (void *)&py_data};
 
-        if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.TexUploadParser, targets)) return nullptr;
+        if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.TexUploadParser, targets)) {
+            return nullptr;
+        }
 
         const void *ptr = nullptr;
         Py_buffer view;
@@ -80,34 +90,44 @@ PyCaravanGL_API Texture_upload(PyCaravanTexture *self, PyObject *const *args, Py
         // Tell OpenGL to unpack memory with 1-byte alignment (standard for Python buffers)
         gl.PixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
-        if (self->tex.target == GL_TEXTURE_2D || self->tex.target == GL_TEXTURE_CUBE_MAP_POSITIVE_X) { // Cube maps use 2D uploads per face
-            gl.TexImage2D(self->tex.target, level, internal_format, width, height, 0, format, type, ptr);
+        if (self->tex.target == GL_TEXTURE_2D ||
+            self->tex.target ==
+                GL_TEXTURE_CUBE_MAP_POSITIVE_X) { // Cube maps use 2D uploads per face
+            gl.TexImage2D(self->tex.target, level, (GLint)internal_format, width, height, 0, format,
+                          type, ptr);
         } else if (self->tex.target == GL_TEXTURE_3D || self->tex.target == GL_TEXTURE_2D_ARRAY) {
-            gl.TexImage3D(self->tex.target, level, internal_format, width, height, depth, 0, format, type, ptr);
+            gl.TexImage3D(self->tex.target, level, (GLint)internal_format, width, height, depth, 0,
+                          format, type, ptr);
         } else if (self->tex.target == GL_TEXTURE_1D) {
-            gl.TexImage1D(self->tex.target, level, internal_format, width, 0, format, type, ptr);
+            gl.TexImage1D(self->tex.target, level, (GLint)internal_format, width, 0, format, type,
+                          ptr);
         }
 
-        if (ptr) PyBuffer_Release(&view);
+        if (ptr) {
+            PyBuffer_Release(&view);
+        }
     }
     Py_RETURN_NONE;
 }
 
-PyCaravanGL_API Texture_bind(PyCaravanTexture *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames) {
+PyCaravanGL_API Texture_bind(PyCaravanTexture *self, PyObject *const *args, Py_ssize_t nargs,
+                             PyObject *kwnames) {
     PyObject *m = PyType_GetModule(Py_TYPE(self));
     WithCaravanGL(m, gl) {
         uint32_t unit = 0;
         void *targets[TexBind_COUNT] = {[IDX_TEX_BIND_UNIT] = &unit};
 
-        if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.TexBindParser, targets)) return nullptr;
-        
-        // TODO: Assuming Sampler Object is 0 for now until Sampler objects are added
+        if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.TexBindParser, targets)) {
+            return nullptr;
+        }
+
+        // TODO(Evilpasture): Assuming Sampler Object is 0 for now until Sampler objects are added
         cv_bind_texture(state, unit, self->tex.target, self->tex.id, 0);
     }
     Py_RETURN_NONE;
 }
 
-PyCaravanGL_API Texture_generate_mipmap(PyCaravanTexture *self, PyObject *unused) {
+PyCaravanGL_API Texture_generate_mipmap(PyCaravanTexture *self, [[maybe_unused]] PyObject *unused) {
     PyObject *m = PyType_GetModule(Py_TYPE(self));
     WithCaravanGL(m, gl) {
         cv_bind_texture(state, 0, self->tex.target, self->tex.id, 0);
@@ -116,23 +136,23 @@ PyCaravanGL_API Texture_generate_mipmap(PyCaravanTexture *self, PyObject *unused
     Py_RETURN_NONE;
 }
 
-static PyMethodDef Texture_methods[] = {
-    {"upload", (PyCFunction)(void(*)(void))Texture_upload, METH_FASTCALL | METH_KEYWORDS, "Upload data to GPU"},
-    {"bind", (PyCFunction)(void(*)(void))Texture_bind, METH_FASTCALL | METH_KEYWORDS, "Bind texture to unit"},
+static const PyMethodDef Texture_methods[] = {
+    {"upload", (PyCFunction)(void (*)(void))Texture_upload, METH_FASTCALL | METH_KEYWORDS,
+     "Upload data to GPU"},
+    {"bind", (PyCFunction)(void (*)(void))Texture_bind, METH_FASTCALL | METH_KEYWORDS,
+     "Bind texture to unit"},
     {"generate_mipmap", (PyCFunction)Texture_generate_mipmap, METH_NOARGS, "Generate mipmaps"},
-    {nullptr}
-};
+    {nullptr}};
 
-static PyType_Slot Texture_slots[] = {
-    {Py_tp_init, Texture_init},
-    {Py_tp_dealloc, Texture_dealloc},
-    {Py_tp_methods, Texture_methods},
-    {0, nullptr}
-};
+static const PyType_Slot Texture_slots[] = {{Py_tp_init, Texture_init},
+                                            {Py_tp_dealloc, Texture_dealloc},
+                                            {Py_tp_methods, (PyMethodDef *)Texture_methods},
+                                            {0, nullptr}};
 
-PyType_Spec Texture_spec = {
+// NOLINTNEXTLINE(misc-use-internal-linkage)
+const PyType_Spec Texture_spec = {
     .name = "caravangl.Texture",
     .basicsize = sizeof(PyCaravanTexture),
     .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
-    .slots = Texture_slots,
+    .slots = (PyType_Slot *)Texture_slots,
 };

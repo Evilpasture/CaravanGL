@@ -1,41 +1,42 @@
 #pragma once
-#include "caravangl_specs.h"
 #include "caravangl_module.h"
+#include "caravangl_specs.h"
 
 // -----------------------------------------------------------------------------
 // Core Bindings (VAO, FBO, Program)
 // -----------------------------------------------------------------------------
 
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_bind_program(CaravanState *s, GLuint program) {
-    if (s->ctx.bound.program != program) [[clang::unlikely]] {
-        s->ctx.bound.program = program;
-        s->gl.UseProgram(program);
+static inline void cv_bind_program(CaravanState *state, GLuint program) {
+    if (state->ctx.bound.program != program) [[clang::unlikely]] {
+        state->ctx.bound.program = program;
+        state->gl.UseProgram(program);
     }
 }
 
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_bind_vao(CaravanState *s, GLuint vao) {
-    if (s->ctx.bound.vao != vao) [[clang::unlikely]] {
-        s->ctx.bound.vao = vao;
-        s->gl.BindVertexArray(vao);
+static inline void cv_bind_vao(CaravanState *state, GLuint vao) {
+    if (state->ctx.bound.vao != vao) [[clang::unlikely]] {
+        state->ctx.bound.vao = vao;
+        state->gl.BindVertexArray(vao);
     }
 }
 
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_bind_fbo_draw(CaravanState *s, GLuint fbo) {
-    if (s->ctx.bound.fbo_draw != fbo) [[clang::unlikely]] {
-        s->ctx.bound.fbo_draw = fbo;
-        s->gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
+static inline void cv_bind_fbo_draw(CaravanState *state, GLuint fbo) {
+    if (state->ctx.bound.fbo_draw != fbo) [[clang::unlikely]] {
+        state->ctx.bound.fbo_draw = fbo;
+        state->gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
     }
 }
 
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_bind_viewport(CaravanState *s, const CaravanRect *vp) {
-    CaravanRect *c = &s->ctx.viewport;
-    if (vp->x != c->x || vp->y != c->y || vp->w != c->w || vp->h != c->h) [[clang::unlikely]] {
-        s->gl.Viewport(vp->x, vp->y, vp->w, vp->h);
-        *c = *vp;
+static inline void cv_bind_viewport(CaravanState *state, const CaravanRect *viewport) {
+    CaravanRect *cview = &state->ctx.viewport;
+    if (viewport->x != cview->x || viewport->y != cview->y || viewport->w != cview->w ||
+        viewport->h != cview->h) [[clang::unlikely]] {
+        state->gl.Viewport(viewport->x, viewport->y, viewport->w, viewport->h);
+        *cview = *viewport;
     }
 }
 
@@ -44,39 +45,56 @@ static inline void cv_bind_viewport(CaravanState *s, const CaravanRect *vp) {
 // -----------------------------------------------------------------------------
 
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_bind_ubo_range(CaravanState *s, GLuint index, GLuint buffer, GLintptr offset, GLsizeiptr size) {
-    if (index >= CARAVAN_MAX_UBO_BINDINGS) [[clang::unlikely]] return;
+static inline void cv_bind_ubo_range(CaravanState *state, GLuint index, GLuint buffer,
+                                     GLintptr offset, GLsizeiptr size) {
+    if (index >= CARAVAN_MAX_UBO_BINDINGS) {
+        [[clang::unlikely]] return;
+    }
 
-    CaravanBufferBinding *b = &s->ctx.bound.ubo[index];
-    if (b->id != buffer || b->offset != offset || b->size != size) [[clang::unlikely]] {
-        s->gl.BindBufferRange(GL_UNIFORM_BUFFER, index, buffer, offset, size);
-        b->id = buffer;
-        b->offset = offset;
-        b->size = size;
+    CaravanBufferBinding *binding = &state->ctx.bound.ubo[index];
+    if (binding->id != buffer || binding->offset != offset || binding->size != size)
+        [[clang::unlikely]] {
+        state->gl.BindBufferRange(GL_UNIFORM_BUFFER, index, buffer, offset, size);
+        binding->id = buffer;
+        binding->offset = offset;
+        binding->size = size;
     }
 }
 
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_bind_texture(CaravanState *s, GLuint unit, GLuint target, GLuint texture, GLuint sampler) {
-    if (unit >= CARAVAN_MAX_TEXTURE_UNITS) [[clang::unlikely]] return;
-
-    CaravanTextureBinding *b = &s->ctx.bound.texture_units[unit];
-    
-    // Change active unit only if needed
-    if (s->ctx.bound.active_texture_unit != unit) {
-        s->gl.ActiveTexture(GL_TEXTURE0 + unit);
-        s->ctx.bound.active_texture_unit = unit;
+static inline void cv_bind_texture(CaravanState *state, GLuint unit, GLuint target, GLuint texture,
+                                   GLuint sampler) {
+    if (unit >= CARAVAN_MAX_TEXTURE_UNITS) {
+        [[clang::unlikely]] return;
     }
 
-    if (b->id != texture || b->target != target) {
-        s->gl.BindTexture(target, texture);
-        b->id = texture;
-        b->target = target;
+    CaravanTextureBinding *binding = &state->ctx.bound.texture_units[unit];
+
+// Change active unit only if needed
+#ifndef __APPLE__
+    // Use the 4.5+ super-path if the function exists in our table
+    if (state->gl.BindTextureUnit != nullptr) {
+        state->gl.BindTextureUnit(unit, texture);
+    } else
+#endif
+    {
+        // Fallback for 3.3 / macOS / Older Hardware
+        if (state->ctx.bound.active_texture_unit != unit) {
+            state->gl.ActiveTexture(GL_TEXTURE0 + unit);
+            state->ctx.bound.active_texture_unit = unit;
+        }
+        state->gl.BindTexture(target, texture);
     }
 
-    if (b->sampler_id != sampler) {
-        s->gl.BindSampler(unit, sampler);
-        b->sampler_id = sampler;
+    if (binding->id != texture || binding->target != target) {
+        state->gl.BindTexture(target, texture);
+        binding->id = texture;
+        binding->target = target;
+    }
+
+    if (binding->sampler_id != sampler) {
+        state->gl.BindSampler(unit, sampler);
+        binding->sampler_id = sampler;
     }
 }
 
@@ -85,22 +103,23 @@ static inline void cv_bind_texture(CaravanState *s, GLuint unit, GLuint target, 
 // -----------------------------------------------------------------------------
 
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_set_depth_state(CaravanState *s, bool enabled, GLenum func, bool write_mask) {
-    CaravanRenderState *rs = &s->ctx.bound.render;
+static inline void cv_set_depth_state(CaravanState *state, bool enabled, GLenum func,
+                                      bool write_mask) {
+    CaravanRenderState *rst = &state->ctx.bound.render;
 
-    if (rs->depth_test_enabled != enabled) {
-        enabled ? s->gl.Enable(GL_DEPTH_TEST) : s->gl.Disable(GL_DEPTH_TEST);
-        rs->depth_test_enabled = enabled;
+    if (rst->depth_test_enabled != enabled) {
+        (int)enabled ? state->gl.Enable(GL_DEPTH_TEST) : state->gl.Disable(GL_DEPTH_TEST);
+        rst->depth_test_enabled = enabled;
     }
 
     if (enabled) {
-        if (rs->depth_func != func) {
-            s->gl.DepthFunc(func);
-            rs->depth_func = func;
+        if (rst->depth_func != func) {
+            state->gl.DepthFunc(func);
+            rst->depth_func = func;
         }
-        if (rs->depth_write_mask != write_mask) {
-            s->gl.DepthMask(write_mask ? GL_TRUE : GL_FALSE);
-            rs->depth_write_mask = write_mask;
+        if (rst->depth_write_mask != write_mask) {
+            state->gl.DepthMask((GLboolean)write_mask ? GL_TRUE : GL_FALSE);
+            rst->depth_write_mask = write_mask;
         }
     }
 }
@@ -110,20 +129,21 @@ static inline void cv_set_depth_state(CaravanState *s, bool enabled, GLenum func
 // -----------------------------------------------------------------------------
 
 [[gnu::always_inline]]
-static inline void cv_wait_for_last_work(CaravanState *s) {
-    if (s->ctx.bound.last_work_fence) {
-        auto sync_status = s->gl.ClientWaitSync(s->ctx.bound.last_work_fence, GL_SYNC_FLUSH_COMMANDS_BIT, GL_TIMEOUT_IGNORED);
+static inline void cv_wait_for_last_work(CaravanState *state) {
+    if (state->ctx.bound.last_work_fence) {
+        auto sync_status = state->gl.ClientWaitSync(state->ctx.bound.last_work_fence,
+                                                    GL_SYNC_FLUSH_COMMANDS_BIT, GL_TIMEOUT_IGNORED);
         assert(sync_status != GL_WAIT_FAILED);
-        s->gl.DeleteSync(s->ctx.bound.last_work_fence);
-        s->ctx.bound.last_work_fence = nullptr;
+        state->gl.DeleteSync(state->ctx.bound.last_work_fence);
+        state->ctx.bound.last_work_fence = nullptr;
     }
 }
 
 [[gnu::always_inline]]
-static inline void cv_insert_work_fence(CaravanState *s) {
+static inline void cv_insert_work_fence(CaravanState *state) {
     // Clean up old fence if it exists
-    if (s->ctx.bound.last_work_fence) {
-        s->gl.DeleteSync(s->ctx.bound.last_work_fence);
+    if (state->ctx.bound.last_work_fence) {
+        state->gl.DeleteSync(state->ctx.bound.last_work_fence);
     }
-    s->ctx.bound.last_work_fence = s->gl.FenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+    state->ctx.bound.last_work_fence = state->gl.FenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
 }
