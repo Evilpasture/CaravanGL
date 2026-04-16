@@ -36,6 +36,10 @@ typedef struct CaravanGLTable {
 } CaravanGLTable;
 
 typedef struct CaravanState {
+    CaravanParsers parsers;
+    CaravanContext ctx;
+    CaravanGLTable gl;
+
     PyTypeObject *BufferType;
     PyTypeObject *PipelineType;
     PyTypeObject *ProgramType;
@@ -43,9 +47,6 @@ typedef struct CaravanState {
     PyTypeObject *UniformBatchType;
     PyTypeObject *TextureType;
     PyObject *CaravanError;
-    CaravanContext ctx;
-    CaravanGLTable gl;
-    CaravanParsers parsers;
 } CaravanState;
 
 [[maybe_unused]]
