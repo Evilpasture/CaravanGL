@@ -1,10 +1,14 @@
 #include "caravangl_arg_indices.h"
 #include <string.h>
 
+// Helper to map C types to Python Type Objects for guarding
+#define GET_TYPE_GUARD(T) _Generic((T), bool: &PyBool_Type, default: (PyTypeObject *)nullptr)
+
 #define GEN_SPEC(ID, NAME, TYPE, REQ)                                                              \
     [ID] = {.name = (NAME),                                                                        \
             .type_name = #TYPE,                                                                    \
             .required = (bool)(REQ),                                                               \
+            .type_guard = GET_TYPE_GUARD((TYPE){0}), /* Pass the guard here */                     \
             .convert = FP_GET_CONVERTER((TYPE){0})},
 
 #define SETUP_PARSER(cp, P, G, S)                                                                  \

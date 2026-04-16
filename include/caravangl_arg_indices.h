@@ -136,14 +136,19 @@ DEFINE_INDEX_GROUP(Viewport, SCHEMA_VIEWPORT)
     X(ClearColor, ClearColor, SCHEMA_CLEAR_COLOR)                                                  \
     X(Viewport, Viewport, SCHEMA_VIEWPORT)
 
-// Macro to declare the struct members
-#define MAP_TO_DECLARE(ParserName, GroupName, Schema)                                              \
-    FastParser ParserName##Parser;                                                                 \
-    FastArgSpec ParserName##Specs[GroupName##_COUNT];
+// Define specialized mappers to split the declarations
+#define MAP_ONLY_PARSER(Name, ...) FastParser Name##Parser;
+#define MAP_ONLY_SPECS(Name, Group, ...) FastArgSpec Name##Specs[Group##_COUNT];
 
 typedef struct CaravanParsers {
-    [[gnu::aligned(128)]]
-    FOR_ALL_PARSERS(MAP_TO_DECLARE) size_t registry_count;
+    // Pass 1: All 64-byte structs (Perfectly packed)
+    FOR_ALL_PARSERS(MAP_ONLY_PARSER)
+
+    // Pass 2: All 48-byte spec arrays
+    FOR_ALL_PARSERS(MAP_ONLY_SPECS)
+
+    // Pass 3: The leftover scalars
+    size_t registry_count;
 } CaravanParsers;
 
 void caravan_init_parsers(CaravanParsers *cp);
