@@ -24,7 +24,7 @@ static GLuint compile_shader(CaravanGLTable *OpenGL, GLenum type, const char *so
 
 PyCaravanGL_Status Program_init(PyCaravanProgram *self, PyObject *args, PyObject *kwds) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
-    WithCaravanGL(mod, gl) {
+    WithCaravanGL(mod, OpenGL) {
         const char *vs_src = nullptr;
         const char *fs_src = nullptr;
 
@@ -35,49 +35,49 @@ PyCaravanGL_Status Program_init(PyCaravanProgram *self, PyObject *args, PyObject
             return -1;
         }
 
-        GLuint vertex_shader = compile_shader(&gl, GL_VERTEX_SHADER, vs_src);
+        GLuint vertex_shader = compile_shader(OpenGL, GL_VERTEX_SHADER, vs_src);
         if (!vertex_shader) {
             return -1;
         }
-        GLuint fragment_shader = compile_shader(&gl, GL_FRAGMENT_SHADER, fs_src);
+        GLuint fragment_shader = compile_shader(OpenGL, GL_FRAGMENT_SHADER, fs_src);
         if (!fragment_shader) {
-            gl.DeleteShader(vertex_shader);
+            OpenGL->DeleteShader(vertex_shader);
             return -1;
         }
 
-        self->id = gl.CreateProgram();
-        gl.AttachShader(self->id, vertex_shader);
-        gl.AttachShader(self->id, fragment_shader);
-        gl.LinkProgram(self->id);
+        self->id = OpenGL->CreateProgram();
+        OpenGL->AttachShader(self->id, vertex_shader);
+        OpenGL->AttachShader(self->id, fragment_shader);
+        OpenGL->LinkProgram(self->id);
 
         // Check Link Status
         GLint success = 0;
-        gl.GetProgramiv(self->id, GL_LINK_STATUS, &success);
+        OpenGL->GetProgramiv(self->id, GL_LINK_STATUS, &success);
         if (!success) {
             constexpr auto LOG_BUFFER_SIZE = 512;
             char info_log[LOG_BUFFER_SIZE];
-            gl.GetProgramInfoLog(self->id, LOG_BUFFER_SIZE, nullptr, info_log);
+            OpenGL->GetProgramInfoLog(self->id, LOG_BUFFER_SIZE, nullptr, info_log);
             PyErr_Format(PyExc_RuntimeError, "Program Linking Failed:\n%s", info_log);
             return -1;
         }
 
         // Clean up shaders
-        gl.DeleteShader(vertex_shader);
-        gl.DeleteShader(fragment_shader);
+        OpenGL->DeleteShader(vertex_shader);
+        OpenGL->DeleteShader(fragment_shader);
     }
     return 0;
 }
 
 PyCaravanGL_Slot Program_dealloc(PyCaravanProgram *self) {
-    PyTypeObject *tp = Py_TYPE(self);
-    PyObject *mod = PyType_GetModule(tp);
-    WithCaravanGL(mod, gl) {
+    PyTypeObject *type = Py_TYPE(self);
+    PyObject *mod = PyType_GetModule(type);
+    WithCaravanGL(mod, OpenGL) {
         if (self->id) {
-            gl.DeleteProgram(self->id);
+            OpenGL->DeleteProgram(self->id);
         }
     }
-    tp->tp_free((PyObject *)self);
-    Py_DECREF(tp);
+    type->tp_free((PyObject *)self);
+    Py_DECREF(type);
 }
 
 // Quick helper to fetch a uniform location from Python
@@ -87,9 +87,9 @@ PyCaravanGL_API Program_get_uniform_location(PyCaravanProgram *self, PyObject *a
         return nullptr;
     }
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
-    WithCaravanGL(mod, gl) {
+    WithCaravanGL(mod, OpenGL) {
         const char *name = PyUnicode_AsUTF8(arg);
-        GLint loc = gl.GetUniformLocation(self->id, name);
+        GLint loc = OpenGL->GetUniformLocation(self->id, name);
         return PyLong_FromLong(loc);
     }
     return nullptr;

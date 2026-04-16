@@ -1,6 +1,5 @@
----
-# CaravanGL Static Analysis Configuration
-# Targeted for C23 + Python 3.14t High-Performance Extension
+# CaravanGL Clang-Tidy Configuration
+# Targets C23 and High-Performance Systems Programming
 
 Checks: >
   -*,
@@ -10,32 +9,47 @@ Checks: >
   readability-*,
   modernize-use-nullptr,
   modernize-use-bool-literals,
-  cert-dcl16-c,
-  cert-exp42-c,
-  cert-flp30-c,
-  cert-str34-c,
+  cert-*,
+  
+  # Structural & Hardware-Sympathetic Suppressions
+  -altera-struct-pack-align,
+  -altera-id-dependent-backward-branch,
+  
+  # Environment & Toolchain Suppressions
+  -llvm-libc-restrict-system-headers,
+  -llvm-libc-implementation-in-namespace,
+  
+  # Style & Noise Reduction
   -readability-identifier-naming,
   -readability-braces-around-statements,
   -readability-function-size,
   -readability-redundant-declaration,
+  -readability-function-cognitive-complexity,
+  
+  # Systems Programming Essentials
   -bugprone-reserved-identifier,
   -bugprone-macro-parentheses,
-  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferPointer,
+  -bugprone-easily-swappable-parameters,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferPointer
 
-WarningsAsErrors: 'bugprone-*,performance-*,clang-analyzer-*'
+# Fail the build for critical logic errors
+WarningsAsErrors: >
+  bugprone-*,
+  performance-*,
+  concurrency-*,
+  clang-analyzer-*
+
+HeaderFilterRegex: '^(?!.*extern/).*(include/|src/).*'
 
 CheckOptions:
-  # Optimization: Allow always_inline for the hot-path draw loops
-  performance-no-int-to-ptr.IgnoreDirectories: 'Python'
+  # C23 nullptr is the gold standard; treat NULL as an alias
+  - key:             modernize-use-nullptr.NullMacros
+    value:           'NULL,nullptr,PY_SSIZE_T_CLEAN'
 
-  # Modern C23 Preferences
-  modernize-use-nullptr.NullMacros: 'NULL,nullptr'
+  # Python's headers are full of int-to-ptr casts; ignore them globally
+  - key:             performance-no-int-to-ptr.IgnoreDirectories
+    value:           'Python;include/python3.14t'
 
-# Configuration for specific checks
-AnalyzeTemporaryDestructors: false
-
-# High-Performance Graphics specific suppressions
-# We allow bitwise operations on signed integers in some cases because 
-# OpenGL constants are sometimes defined as signed ints in legacy headers.
-# We also allow C-style casts because the Python C API is built on them.
----
+  # Standard MT-unsafe functions to watch out for
+  - key:             concurrency-mt-unsafe.FunctionNames
+    value:           'setenv,getenv,strtok'

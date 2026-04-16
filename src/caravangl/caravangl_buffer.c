@@ -8,12 +8,12 @@
  * Buffer Deallocator: Cleans up GPU resources before the Python object is freed.
  */
 PyCaravanGL_Slot Buffer_dealloc(PyCaravanBuffer *self) {
-    PyTypeObject *tp = Py_TYPE(self);
-    PyObject *mod = PyType_GetModule(tp);
+    PyTypeObject *type = Py_TYPE(self);
+    PyObject *mod = PyType_GetModule(type);
 
-    WithCaravanGL(mod, gl) {
+    WithCaravanGL(mod, OpenGL) {
         if (self->buf.id != 0) {
-            gl.DeleteBuffers(1, &self->buf.id);
+            OpenGL->DeleteBuffers(1, &self->buf.id);
             self->buf.id = 0;
         }
     }
@@ -22,8 +22,8 @@ PyCaravanGL_Slot Buffer_dealloc(PyCaravanBuffer *self) {
         PyObject_ClearWeakRefs((PyObject *)self);
     }
 
-    tp->tp_free((PyObject *)self);
-    Py_DECREF(tp);
+    type->tp_free((PyObject *)self);
+    Py_DECREF(type);
 }
 
 /**
@@ -33,7 +33,7 @@ PyCaravanGL_Slot Buffer_dealloc(PyCaravanBuffer *self) {
 PyCaravanGL_Status Buffer_init(PyCaravanBuffer *self, PyObject *args, PyObject *kwds) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
 
-    WithCaravanGL(mod, gl) {
+    WithCaravanGL(mod, OpenGL) {
         int size = 0;
         PyObject *data = nullptr;
         uint32_t target = GL_ARRAY_BUFFER;
@@ -49,8 +49,8 @@ PyCaravanGL_Status Buffer_init(PyCaravanBuffer *self, PyObject *args, PyObject *
             return -1;
         }
 
-        gl.GenBuffers(1, &self->buf.id);
-        gl.BindBuffer(target, self->buf.id);
+        OpenGL->GenBuffers(1, &self->buf.id);
+        OpenGL->BindBuffer(target, self->buf.id);
 
         const void *ptr = nullptr;
         Py_buffer view;
@@ -62,7 +62,7 @@ PyCaravanGL_Status Buffer_init(PyCaravanBuffer *self, PyObject *args, PyObject *
             }
         }
 
-        gl.BufferData(target, (GLsizeiptr)size, ptr, usage);
+        OpenGL->BufferData(target, (GLsizeiptr)size, ptr, usage);
         if (ptr) {
             PyBuffer_Release(&view);
         }
@@ -82,7 +82,7 @@ PyCaravanGL_API Buffer_write(PyCaravanBuffer *self, PyObject *const *args, Py_ss
                              PyObject *kwnames) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
 
-    WithCaravanGL(mod, gl) {
+    WithCaravanGL(mod, OpenGL) {
         PyObject *data = nullptr;
         int offset = 0;
         void *targets[BufWrite_COUNT] = {[IDX_BUF_WRITE_DATA] = (void *)&data,
@@ -104,8 +104,8 @@ PyCaravanGL_API Buffer_write(PyCaravanBuffer *self, PyObject *const *args, Py_ss
             return nullptr;
         }
 
-        gl.BindBuffer(self->buf.target, self->buf.id);
-        gl.BufferSubData(self->buf.target, (GLintptr)offset, (GLsizeiptr)view.len, view.buf);
+        OpenGL->BindBuffer(self->buf.target, self->buf.id);
+        OpenGL->BufferSubData(self->buf.target, (GLintptr)offset, (GLsizeiptr)view.len, view.buf);
         PyBuffer_Release(&view);
     }
     Py_RETURN_NONE;
@@ -119,14 +119,14 @@ PyCaravanGL_API Buffer_bind_base(PyCaravanBuffer *self, PyObject *const *args, P
                                  PyObject *kwnames) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
 
-    WithCaravanGL(mod, gl) {
+    WithCaravanGL(mod, OpenGL) {
         uint32_t index = 0;
         void *targets[BufBind_COUNT] = {[IDX_BUF_BIND_IDX] = &index};
 
         if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.BufBindParser, targets)) {
             return nullptr;
         }
-        gl.BindBufferBase(self->buf.target, index, self->buf.id);
+        OpenGL->BindBufferBase(self->buf.target, index, self->buf.id);
     }
     Py_RETURN_NONE;
 }

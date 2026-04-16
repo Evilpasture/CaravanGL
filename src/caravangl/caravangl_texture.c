@@ -2,8 +2,8 @@
 #include "pycaravangl.h"
 
 PyCaravanGL_Status Texture_init(PyCaravanTexture *self, PyObject *args, PyObject *kwds) {
-    PyObject *m = PyType_GetModule(Py_TYPE(self));
-    WithCaravanGL(m, gl) {
+    PyObject *mod = PyType_GetModule(Py_TYPE(self));
+    WithCaravanGL(mod, OpenGL) {
         uint32_t target = GL_TEXTURE_2D;
         void *targets[TexInit_COUNT] = {[IDX_TEX_TARGET] = &target};
 
@@ -11,27 +11,27 @@ PyCaravanGL_Status Texture_init(PyCaravanTexture *self, PyObject *args, PyObject
             return -1;
         }
 
-        gl.GenTextures(1, &self->tex.id);
+        OpenGL->GenTextures(1, &self->tex.id);
         self->tex.target = target;
 
         // Setup sane defaults for 3.3 Core (Requires this or incomplete texture error)
-        gl.BindTexture(target, self->tex.id);
-        gl.TexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        gl.TexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        gl.TexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        gl.TexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        gl.BindTexture(target, 0);
+        OpenGL->BindTexture(target, self->tex.id);
+        OpenGL->TexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        OpenGL->TexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        OpenGL->TexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        OpenGL->TexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        OpenGL->BindTexture(target, 0);
     }
     return 0;
 }
 
 PyCaravanGL_Slot Texture_dealloc(PyCaravanTexture *self) {
     PyTypeObject *tp = Py_TYPE(self);
-    PyObject *m = PyType_GetModule(tp);
+    PyObject *mod = PyType_GetModule(tp);
 
-    WithCaravanGL(m, gl) {
+    WithCaravanGL(mod, OpenGL) {
         if (self->tex.id != 0) {
-            gl.DeleteTextures(1, &self->tex.id);
+            OpenGL->DeleteTextures(1, &self->tex.id);
             self->tex.id = 0;
         }
     }
@@ -41,8 +41,8 @@ PyCaravanGL_Slot Texture_dealloc(PyCaravanTexture *self) {
 
 PyCaravanGL_API Texture_upload(PyCaravanTexture *self, PyObject *const *args, Py_ssize_t nargs,
                                PyObject *kwnames) {
-    PyObject *m = PyType_GetModule(Py_TYPE(self));
-    WithCaravanGL(m, gl) {
+    PyObject *mod = PyType_GetModule(Py_TYPE(self));
+    WithCaravanGL(mod, OpenGL) {
         int level = 0;
         int width = 0;
         int height = 0;
@@ -85,22 +85,22 @@ PyCaravanGL_API Texture_upload(PyCaravanTexture *self, PyObject *const *args, Py
         self->tex.type = type;
 
         // Force bind texture to unit 0 for upload
-        cv_bind_texture(state, 0, self->tex.target, self->tex.id, 0);
+        cv_bind_texture(state, 0, &self->tex, 0);
 
         // Tell OpenGL to unpack memory with 1-byte alignment (standard for Python buffers)
-        gl.PixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        OpenGL->PixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
         if (self->tex.target == GL_TEXTURE_2D ||
             self->tex.target ==
                 GL_TEXTURE_CUBE_MAP_POSITIVE_X) { // Cube maps use 2D uploads per face
-            gl.TexImage2D(self->tex.target, level, (GLint)internal_format, width, height, 0, format,
-                          type, ptr);
+            OpenGL->TexImage2D(self->tex.target, level, (GLint)internal_format, width, height, 0,
+                               format, type, ptr);
         } else if (self->tex.target == GL_TEXTURE_3D || self->tex.target == GL_TEXTURE_2D_ARRAY) {
-            gl.TexImage3D(self->tex.target, level, (GLint)internal_format, width, height, depth, 0,
-                          format, type, ptr);
+            OpenGL->TexImage3D(self->tex.target, level, (GLint)internal_format, width, height,
+                               depth, 0, format, type, ptr);
         } else if (self->tex.target == GL_TEXTURE_1D) {
-            gl.TexImage1D(self->tex.target, level, (GLint)internal_format, width, 0, format, type,
-                          ptr);
+            OpenGL->TexImage1D(self->tex.target, level, (GLint)internal_format, width, 0, format,
+                               type, ptr);
         }
 
         if (ptr) {
@@ -112,8 +112,8 @@ PyCaravanGL_API Texture_upload(PyCaravanTexture *self, PyObject *const *args, Py
 
 PyCaravanGL_API Texture_bind(PyCaravanTexture *self, PyObject *const *args, Py_ssize_t nargs,
                              PyObject *kwnames) {
-    PyObject *m = PyType_GetModule(Py_TYPE(self));
-    WithCaravanGL(m, gl) {
+    PyObject *mod = PyType_GetModule(Py_TYPE(self));
+    WithCaravanGL(mod, OpenGL) {
         uint32_t unit = 0;
         void *targets[TexBind_COUNT] = {[IDX_TEX_BIND_UNIT] = &unit};
 
@@ -122,16 +122,16 @@ PyCaravanGL_API Texture_bind(PyCaravanTexture *self, PyObject *const *args, Py_s
         }
 
         // TODO(Evilpasture): Assuming Sampler Object is 0 for now until Sampler objects are added
-        cv_bind_texture(state, unit, self->tex.target, self->tex.id, 0);
+        cv_bind_texture(state, unit, &self->tex, 0);
     }
     Py_RETURN_NONE;
 }
 
 PyCaravanGL_API Texture_generate_mipmap(PyCaravanTexture *self, [[maybe_unused]] PyObject *unused) {
-    PyObject *m = PyType_GetModule(Py_TYPE(self));
-    WithCaravanGL(m, gl) {
-        cv_bind_texture(state, 0, self->tex.target, self->tex.id, 0);
-        gl.GenerateMipmap(self->tex.target);
+    PyObject *mod = PyType_GetModule(Py_TYPE(self));
+    WithCaravanGL(mod, OpenGL) {
+        cv_bind_texture(state, 0, &self->tex, 0);
+        OpenGL->GenerateMipmap(self->tex.target);
     }
     Py_RETURN_NONE;
 }

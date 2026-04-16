@@ -16,8 +16,8 @@
  *    Example:
  *      static PyObject* my_func(PyObject* m, PyObject* args) {
  *          auto gl = gl_table(m); // C23: auto infers 'CaravanGLTable'
- *          gl.ClearColor(1, 0, 0, 1);
- *          gl.Clear(GL_COLOR_BUFFER_BIT);
+ *          OpenGL->ClearColor(1, 0, 0, 1);
+ *          OpenGL->Clear(GL_COLOR_BUFFER_BIT);
  *          Py_RETURN_NONE;
  *      }
  *
@@ -28,7 +28,7 @@
  *    Example:
  *      auto* state = get_caravan_state(m);
  *      if (state->ctx.bound.vao != vao_id) {
- *          state->gl.BindVertexArray(vao_id);
+ *          state->OpenGL->BindVertexArray(vao_id);
  *          state->ctx.bound.vao = vao_id;
  *      }
  *
@@ -38,8 +38,8 @@
  *
  *    Example:
  *      auto gl = gl_table(m);
- *      if (gl.DispatchCompute) {
- *          gl.DispatchCompute(x, y, z);
+ *      if (OpenGL->DispatchCompute) {
+ *          OpenGL->DispatchCompute(x, y, z);
  *      }
  *
  * 5. UNIFORM DISPATCH
@@ -53,12 +53,12 @@
  *    core -> specs -> module -> loader -> uniforms
  */
 
-#include "caravangl_core.h"     // Basic GL Types, Constants, and X-Macros
-#include "caravangl_loader.h"   // Loader implementation (load_gl)
-#include "caravangl_module.h"   // Python State (CaravanState & CaravanGLTable)
+#include "caravangl_core.h"   // Basic GL Types, Constants, and X-Macros
+#include "caravangl_loader.h" // Loader implementation (load_gl)
+#include "caravangl_module.h" // Python State (CaravanState & CaravanGLTable)
 #if defined(CARAVANGL_LOADER_ONLY)
 
 #else
-#include "caravangl_specs.h"    // Engine Structs (Buffers, Context, Textures)
+#include "caravangl_specs.h" // Engine Structs (Buffers, Context, Textures)
 #endif
 #include "caravangl_uniforms.h" // Uniform dispatch wrappers

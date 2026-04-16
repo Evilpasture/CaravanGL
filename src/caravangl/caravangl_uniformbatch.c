@@ -26,37 +26,19 @@ PyCaravanGL_Status UniformBatch_init(PyCaravanUniformBatch *self, PyObject *args
     self->max_bindings = max_binds;
     self->max_payload_bytes = max_bytes;
     self->current_payload_offset = 0;
-
-    // Set up the memory view for Python (exposing it as raw bytes 'B')
-    self->payload_buffer.buf = self->payload;
-    self->payload_buffer.len = max_bytes;
-    self->payload_buffer.readonly = 0;
-    self->payload_buffer.itemsize = 1;
-    self->payload_buffer.format = "B";
-    self->payload_buffer.ndim = 1;
-
-    static Py_ssize_t ub_stride = 1;
-    self->payload_buffer.shape = (Py_ssize_t *)&self->max_payload_bytes;
-    self->payload_buffer.strides = &ub_stride;
-
-    self->payload_buffer.obj = (PyObject *)self;
-    Py_INCREF(self);
-
-    self->payload_view = PyMemoryView_FromBuffer(&self->payload_buffer);
     return 0;
 }
 
 PyCaravanGL_Slot UniformBatch_dealloc(PyCaravanUniformBatch *self) {
-    PyTypeObject *tp = Py_TYPE(self);
-    Py_XDECREF(self->payload_view);
+    PyTypeObject *type = Py_TYPE(self);
     if (self->header) {
         PyMem_Free(self->header);
     }
     if (self->payload) {
         PyMem_Free(self->payload);
     }
-    tp->tp_free((PyObject *)self);
-    Py_DECREF(tp);
+    type->tp_free((PyObject *)self);
+    Py_DECREF(type);
 }
 
 PyCaravanGL_API UniformBatch_add(PyCaravanUniformBatch *self, PyObject *const *args,
@@ -104,7 +86,23 @@ PyCaravanGL_API UniformBatch_add(PyCaravanUniformBatch *self, PyObject *const *a
 }
 
 PyCaravanGL_API UniformBatch_get_data(PyCaravanUniformBatch *self, [[maybe_unused]] void *closure) {
-    return Py_NewRef(self->payload_view);
+    Py_buffer view;
+    Py_ssize_t shape = (Py_ssize_t)self->max_payload_bytes;
+
+    view.buf = self->payload;
+    view.obj = (PyObject *)self; // This object "owns" the memory
+    view.len = shape;
+    view.readonly = 0; // Set to 1 if you want the buffer to be read-only
+    view.itemsize = 1;
+    view.format = "B"; // "B" is unsigned byte
+    view.ndim = 1;
+    view.shape = nullptr;
+    view.strides = nullptr;
+    view.suboffsets = nullptr;
+    view.internal = nullptr;
+
+    // This creates the view and increments Py_REFCOUNT(self)
+    return PyMemoryView_FromBuffer(&view);
 }
 
 static const PyGetSetDef UniformBatch_getset[] = {{"data", (getter)UniformBatch_get_data, nullptr,
@@ -123,6 +121,7 @@ static const PyType_Slot UniformBatch_slots[] = {
     {Py_tp_methods, (PyMethodDef *)UniformBatch_methods},
     {Py_tp_getset, (PyGetSetDef *)UniformBatch_getset},
     {}};
+
 // NOLINTNEXTLINE(misc-use-internal-linkage)
 const PyType_Spec UniformBatch_spec = {
     .name = "caravangl.UniformBatch",

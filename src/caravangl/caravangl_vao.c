@@ -6,28 +6,28 @@
 
 PyCaravanGL_Status VertexArray_init(PyCaravanVertexArray *self, [[maybe_unused]] PyObject *args) {
     PyObject *module = PyType_GetModule(Py_TYPE(self));
-    WithCaravanGL(module, gl) {
-        gl.GenVertexArrays(1, &self->id);
+    WithCaravanGL(module, OpenGL) {
+        OpenGL->GenVertexArrays(1, &self->id);
     }
     return 0;
 }
 
 PyCaravanGL_Slot VertexArray_dealloc(PyCaravanVertexArray *self) {
-    PyTypeObject *tp = Py_TYPE(self);
-    PyObject *module = PyType_GetModule(tp);
-    WithCaravanGL(module, gl) {
+    PyTypeObject *type = Py_TYPE(self);
+    PyObject *module = PyType_GetModule(type);
+    WithCaravanGL(module, OpenGL) {
         if (self->id) {
-            gl.DeleteVertexArrays(1, &self->id);
+            OpenGL->DeleteVertexArrays(1, &self->id);
         }
     }
-    tp->tp_free((PyObject *)self);
-    Py_DECREF(tp);
+    type->tp_free((PyObject *)self);
+    Py_DECREF(type);
 }
 
 PyCaravanGL_API VertexArray_bind_attribute(PyCaravanVertexArray *self, PyObject *const *args,
                                            Py_ssize_t nargs, PyObject *kwnames) {
     PyObject *module = PyType_GetModule(Py_TYPE(self));
-    WithCaravanGL(module, gl) {
+    WithCaravanGL(module, OpenGL) {
         uint32_t location = 0;
         uint32_t type = GL_FLOAT;
         int size = 0;
@@ -54,30 +54,30 @@ PyCaravanGL_API VertexArray_bind_attribute(PyCaravanVertexArray *self, PyObject 
         PyCaravanBuffer *buf = (PyCaravanBuffer *)py_buffer;
 
         // Bind VAO and VBO, then map the attribute
-        gl.BindVertexArray(self->id);
-        gl.BindBuffer(GL_ARRAY_BUFFER, buf->buf.id);
+        OpenGL->BindVertexArray(self->id);
+        OpenGL->BindBuffer(GL_ARRAY_BUFFER, buf->buf.id);
 
-        gl.EnableVertexAttribArray(location);
-        gl.VertexAttribPointer(location, size, type, normalized ? GL_TRUE : GL_FALSE, stride,
-                               (char *)0 + offset);
+        OpenGL->EnableVertexAttribArray(location);
+        OpenGL->VertexAttribPointer(location, size, type, normalized ? GL_TRUE : GL_FALSE, stride,
+                                    IntToPtr(offset));
 
         // Unbind VAO to prevent accidental corruption
-        gl.BindVertexArray(0);
+        OpenGL->BindVertexArray(0);
     }
     Py_RETURN_NONE;
 }
 
 PyCaravanGL_API VertexArray_bind_index_buffer(PyCaravanVertexArray *self, PyObject *arg) {
     PyObject *module = PyType_GetModule(Py_TYPE(self));
-    WithCaravanGL(module, gl) {
+    WithCaravanGL(module, OpenGL) {
         if (Py_TYPE(arg) != state->BufferType) {
             PyErr_SetString(PyExc_TypeError, "Expected a caravangl.Buffer");
             return nullptr;
         }
         PyCaravanBuffer *buf = (PyCaravanBuffer *)arg;
-        gl.BindVertexArray(self->id);
-        gl.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, buf->buf.id);
-        gl.BindVertexArray(0);
+        OpenGL->BindVertexArray(self->id);
+        OpenGL->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, buf->buf.id);
+        OpenGL->BindVertexArray(0);
     }
     Py_RETURN_NONE;
 }

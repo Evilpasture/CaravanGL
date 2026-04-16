@@ -10,7 +10,9 @@
 static void *load_opengl_function(PyObject *loader_function, const char *method) {
     // Calling the Python loader method
     auto res = PyObject_CallFunction(loader_function, "s", method);
-    if (!res) return nullptr;
+    if (!res) {
+        return nullptr;
+    }
 
     // If Python returns None, return nullptr immediately without error
     if (res == Py_None) {
@@ -31,8 +33,11 @@ static void *load_opengl_function(PyObject *loader_function, const char *method)
 }
 
 [[maybe_unused]] [[nodiscard]]
+// NOLINTNEXTLINE(readability-function-cognitive-complexity, readability-function-size)
 static int load_gl(CaravanState *state, PyObject *loader) {
-    if (!state) return -1;
+    if (!state) {
+        return -1;
+    }
 
     auto loader_function = PyObject_GetAttrString(loader, "load_opengl_function");
     if (!loader_function) {
@@ -45,15 +50,17 @@ static int load_gl(CaravanState *state, PyObject *loader) {
 // --- 1. REQUIRED: 3.3 Core Baseline ---
 // (Works on macOS, Linux, Windows)
 #define LOAD_REQUIRED(ret, func_name, ...)                                                         \
-    do {                                                                                           \
+    _Pragma("unroll") do {                                                                         \
         auto ptr = load_opengl_function(loader_function, "gl" #func_name);                         \
         state->gl.func_name = (typeof(state->gl.func_name))ptr;                                    \
         if (!state->gl.func_name) {                                                                \
-            auto s = PyUnicode_FromString("gl" #func_name);                                        \
-            PyList_Append(missing, s);                                                             \
-            Py_XDECREF(s);                                                                         \
+            auto state = PyUnicode_FromString("gl" #func_name);                                    \
+            PyList_Append(missing, state);                                                         \
+            Py_XDECREF(state);                                                                     \
         }                                                                                          \
-    } while (false);
+    }                                                                                              \
+    while (false)                                                                                  \
+        ;
 
     GL_FUNCTIONS_3_3_CORE(LOAD_REQUIRED)
 

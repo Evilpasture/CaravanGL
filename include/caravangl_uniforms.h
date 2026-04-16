@@ -9,86 +9,80 @@
  * Signature for generic uniform upload functions.
  * Takes the isolated CaravanState to access the function table.
  */
-typedef void (*UniformUploadFn)(CaravanState *state, GLint location,
-                                GLsizei count, const void *ptr);
+typedef void (*UniformUploadFn)(CaravanState *state, GLint location, GLsizei count,
+                                const void *ptr);
 
-// -- Wrappers (Using s->gl.Member syntax) --
+// -- Wrappers (Using state->gl.Member syntax) --
 
 // Integers
-static inline void u_1iv(CaravanState *s, GLint l, GLsizei c, const void *p) {
-  s->gl.Uniform1iv(l, c, (const GLint *)p);
+static inline void u_1iv(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.Uniform1iv(location, count, (const GLint *)ptr);
 }
-static inline void u_2iv(CaravanState *s, GLint l, GLsizei c, const void *p) {
-  s->gl.Uniform2iv(l, c, (const GLint *)p);
+static inline void u_2iv(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.Uniform2iv(location, count, (const GLint *)ptr);
 }
-static inline void u_3iv(CaravanState *s, GLint l, GLsizei c, const void *p) {
-  s->gl.Uniform3iv(l, c, (const GLint *)p);
+static inline void u_3iv(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.Uniform3iv(location, count, (const GLint *)ptr);
 }
-static inline void u_4iv(CaravanState *s, GLint l, GLsizei c, const void *p) {
-  s->gl.Uniform4iv(l, c, (const GLint *)p);
+static inline void u_4iv(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.Uniform4iv(location, count, (const GLint *)ptr);
 }
 
 // Unsigned Integers
-static inline void u_1uiv(CaravanState *s, GLint l, GLsizei c, const void *p) {
-  s->gl.Uniform1uiv(l, c, (const GLuint *)p);
+static inline void u_1uiv(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.Uniform1uiv(location, count, (const GLuint *)ptr);
 }
-static inline void u_2uiv(CaravanState *s, GLint l, GLsizei c, const void *p) {
-  s->gl.Uniform2uiv(l, c, (const GLuint *)p);
+static inline void u_2uiv(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.Uniform2uiv(location, count, (const GLuint *)ptr);
 }
-static inline void u_3uiv(CaravanState *s, GLint l, GLsizei c, const void *p) {
-  s->gl.Uniform3uiv(l, c, (const GLuint *)p);
+static inline void u_3uiv(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.Uniform3uiv(location, count, (const GLuint *)ptr);
 }
-static inline void u_4uiv(CaravanState *s, GLint l, GLsizei c, const void *p) {
-  s->gl.Uniform4uiv(l, c, (const GLuint *)p);
+static inline void u_4uiv(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.Uniform4uiv(location, count, (const GLuint *)ptr);
 }
 
 // Floats
-static inline void u_1fv(CaravanState *s, GLint l, GLsizei c, const void *p) {
-  s->gl.Uniform1fv(l, c, (const GLfloat *)p);
+static inline void u_1fv(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.Uniform1fv(location, count, (const GLfloat *)ptr);
 }
-static inline void u_2fv(CaravanState *s, GLint l, GLsizei c, const void *p) {
-  s->gl.Uniform2fv(l, c, (const GLfloat *)p);
+static inline void u_2fv(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.Uniform2fv(location, count, (const GLfloat *)ptr);
 }
-static inline void u_3fv(CaravanState *s, GLint l, GLsizei c, const void *p) {
-  s->gl.Uniform3fv(l, c, (const GLfloat *)p);
+static inline void u_3fv(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.Uniform3fv(location, count, (const GLfloat *)ptr);
 }
-static inline void u_4fv(CaravanState *s, GLint l, GLsizei c, const void *p) {
-  s->gl.Uniform4fv(l, c, (const GLfloat *)p);
+static inline void u_4fv(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.Uniform4fv(location, count, (const GLfloat *)ptr);
 }
 
 // Matrices (Always Transpose = GL_FALSE per GLSL spec)
-static inline void u_mat2(CaravanState *s, GLint l, GLsizei c, const void *p) {
-  s->gl.UniformMatrix2fv(l, c, GL_FALSE, (const GLfloat *)p);
+static inline void u_mat2(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.UniformMatrix2fv(location, count, GL_FALSE, (const GLfloat *)ptr);
 }
-static inline void u_mat2x3(CaravanState *s, GLint l, GLsizei c,
-                            const void *p) {
-  s->gl.UniformMatrix2x3fv(l, c, GL_FALSE, (const GLfloat *)p);
+static inline void u_mat2x3(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.UniformMatrix2x3fv(location, count, GL_FALSE, (const GLfloat *)ptr);
 }
-static inline void u_mat2x4(CaravanState *s, GLint l, GLsizei c,
-                            const void *p) {
-  s->gl.UniformMatrix2x4fv(l, c, GL_FALSE, (const GLfloat *)p);
+static inline void u_mat2x4(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.UniformMatrix2x4fv(location, count, GL_FALSE, (const GLfloat *)ptr);
 }
-static inline void u_mat3x2(CaravanState *s, GLint l, GLsizei c,
-                            const void *p) {
-  s->gl.UniformMatrix3x2fv(l, c, GL_FALSE, (const GLfloat *)p);
+static inline void u_mat3x2(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.UniformMatrix3x2fv(location, count, GL_FALSE, (const GLfloat *)ptr);
 }
-static inline void u_mat3(CaravanState *s, GLint l, GLsizei c, const void *p) {
-  s->gl.UniformMatrix3fv(l, c, GL_FALSE, (const GLfloat *)p);
+static inline void u_mat3(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.UniformMatrix3fv(location, count, GL_FALSE, (const GLfloat *)ptr);
 }
-static inline void u_mat3x4(CaravanState *s, GLint l, GLsizei c,
-                            const void *p) {
-  s->gl.UniformMatrix3x4fv(l, c, GL_FALSE, (const GLfloat *)p);
+static inline void u_mat3x4(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.UniformMatrix3x4fv(location, count, GL_FALSE, (const GLfloat *)ptr);
 }
-static inline void u_mat4x2(CaravanState *s, GLint l, GLsizei c,
-                            const void *p) {
-  s->gl.UniformMatrix4x2fv(l, c, GL_FALSE, (const GLfloat *)p);
+static inline void u_mat4x2(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.UniformMatrix4x2fv(location, count, GL_FALSE, (const GLfloat *)ptr);
 }
-static inline void u_mat4x3(CaravanState *s, GLint l, GLsizei c,
-                            const void *p) {
-  s->gl.UniformMatrix4x3fv(l, c, GL_FALSE, (const GLfloat *)p);
+static inline void u_mat4x3(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.UniformMatrix4x3fv(location, count, GL_FALSE, (const GLfloat *)ptr);
 }
-static inline void u_mat4(CaravanState *s, GLint l, GLsizei c, const void *p) {
-  s->gl.UniformMatrix4fv(l, c, GL_FALSE, (const GLfloat *)p);
+static inline void u_mat4(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.UniformMatrix4fv(location, count, GL_FALSE, (const GLfloat *)ptr);
 }
 
 // -- Dispatch Table --

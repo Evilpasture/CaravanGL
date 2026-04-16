@@ -30,6 +30,33 @@ target_link_libraries(caravangl PRIVATE
     mag_mutex_lib
 )
 
+# 4. The Enforcer: Run clang-tidy using the project's .clang-tidy YAML
+find_program(CLANG_TIDY_EXE NAMES "clang-tidy")
+
+if(CLANG_TIDY_EXE)
+    message(STATUS "Clang-Tidy Enforcer: ON (Source: .clang-tidy file)")
+    
+    # We remove --checks and --warnings-as-errors from here.
+    # Clang-tidy will now automatically find your .clang-tidy file in the project root.
+    set(CLANG_TIDY_COMMAND
+        "${CLANG_TIDY_EXE}"
+        "--extra-arg=-std=c23"  # Still necessary to force C23 parsing
+        "--header-filter=include/.*"
+    )
+
+    # Set the property on the target
+    set_target_properties(caravangl PROPERTIES
+        C_CLANG_TIDY "${CLANG_TIDY_COMMAND}"
+    )
+    
+    # Optional: Fail the build if the config file is missing
+    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy")
+        message(FATAL_ERROR "CaravanGL: .clang-tidy config missing! The enforcer has nothing to enforce.")
+    endif()
+else()
+    message(WARNING "Clang-Tidy not found! Enforcer is bypassed.")
+endif()
+
 target_include_directories(caravangl PRIVATE include)
 
 if(APPLE)

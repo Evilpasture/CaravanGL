@@ -14,14 +14,18 @@ typedef struct CaravanUniformHeader {
     CaravanUniformBinding bindings[];
 } CaravanUniformHeader;
 
+typedef struct {
+    const CaravanUniformHeader *header;
+    const void *payload;
+} CaravanUniformSource;
+
 /**
  * Executes a batch of uniform uploads using the function pointer table.
  */
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_upload_uniform_batch(CaravanState *state, const void *header_buffer,
-                                           const void *data_payload) {
-    const CaravanUniformHeader *header = (const CaravanUniformHeader *)header_buffer;
-    const char *data = (const char *)data_payload;
+static inline void cv_upload_uniform_batch(CaravanState *state, CaravanUniformSource src) {
+    const CaravanUniformHeader *header = src.header;
+    const char *data = (const char *)src.payload;
 #pragma unroll 4
     for (uint32_t i = 0; i < header->count; ++i) {
         const CaravanUniformBinding *binding = &header->bindings[i];

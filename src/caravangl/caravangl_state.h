@@ -61,8 +61,8 @@ static inline void cv_bind_ubo_range(CaravanState *state, GLuint index, GLuint b
     }
 }
 
-[[gnu::always_inline, gnu::hot]]
-static inline void cv_bind_texture(CaravanState *state, GLuint unit, GLuint target, GLuint texture,
+[[gnu::always_inline, gnu::hot]] [[gnu::always_inline, gnu::hot]]
+static inline void cv_bind_texture(CaravanState *state, GLuint unit, const CaravanTexture *tex,
                                    GLuint sampler) {
     if (unit >= CARAVAN_MAX_TEXTURE_UNITS) {
         [[clang::unlikely]] return;
@@ -70,28 +70,30 @@ static inline void cv_bind_texture(CaravanState *state, GLuint unit, GLuint targ
 
     CaravanTextureBinding *binding = &state->ctx.bound.texture_units[unit];
 
-// Change active unit only if needed
-#ifndef __APPLE__
-    // Use the 4.5+ super-path if the function exists in our table
-    if (state->gl.BindTextureUnit != nullptr) {
-        state->gl.BindTextureUnit(unit, texture);
-    } else
-#endif
-    {
-        // Fallback for 3.3 / macOS / Older Hardware
-        if (state->ctx.bound.active_texture_unit != unit) {
-            state->gl.ActiveTexture(GL_TEXTURE0 + unit);
-            state->ctx.bound.active_texture_unit = unit;
-        }
-        state->gl.BindTexture(target, texture);
-    }
+    GLuint texture_id = tex->id;
+    GLenum target = tex->target;
 
-    if (binding->id != texture || binding->target != target) {
-        state->gl.BindTexture(target, texture);
-        binding->id = texture;
+    // 1. Texture Binding Logic
+    if (binding->id != texture_id || binding->target != target) {
+#ifndef __APPLE__
+        // Prefer DSA (OpenGL 4.5+)
+        if (state->gl.BindTextureUnit != nullptr) {
+            state->gl.BindTextureUnit(unit, texture_id);
+        } else
+#endif
+        {
+            // Fallback (OpenGL 3.3 / macOS)
+            if (state->ctx.bound.active_texture_unit != unit) {
+                state->gl.ActiveTexture(GL_TEXTURE0 + unit);
+                state->ctx.bound.active_texture_unit = unit;
+            }
+            state->gl.BindTexture(target, texture_id);
+        }
+        binding->id = texture_id;
         binding->target = target;
     }
 
+    // 2. Sampler Binding Logic
     if (binding->sampler_id != sampler) {
         state->gl.BindSampler(unit, sampler);
         binding->sampler_id = sampler;
