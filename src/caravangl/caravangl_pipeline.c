@@ -4,6 +4,7 @@
 PyCaravanGL_Status Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObject *kwds) {
     PyObject *module = PyType_GetModule(Py_TYPE(self));
     CaravanState *state = (CaravanState *)PyModule_GetState(module);
+
     // Variables to parse into
     PyObject *py_program = nullptr;
     PyObject *py_vao = nullptr;
@@ -15,27 +16,31 @@ PyCaravanGL_Status Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObje
     int depth_write = 1;
     uint32_t depth_func = GL_LESS;
     int blend_enabled = 0;
+    int cull_enabled = 0; // <--- FIX: Added missing variable
 
     void *targets[PipelineInit_COUNT] = {
         [IDX_PL_PROGRAM] = (void *)&py_program, [IDX_PL_VAO] = (void *)&py_vao,
         [IDX_PL_TOPO] = (void *)(&topology),    [IDX_PL_IDX_TYP] = (void *)(&index_type),
         [IDX_PL_DEPTH] = (void *)(&depth_test), [IDX_PL_DWRITE] = (void *)(&depth_write),
-        [IDX_PL_DFUNC] = (void *)(&depth_func), [IDX_PL_BLEND] = (void *)&blend_enabled};
+        [IDX_PL_DFUNC] = (void *)(&depth_func), [IDX_PL_BLEND] = (void *)&blend_enabled,
+        [IDX_PL_CULL] = (void *)&cull_enabled // <--- FIX: Added missing array mapping
+    };
 
     if (!FastParse_Unified(args, kwds, nullptr, &state->parsers.PipelineInitParser, targets)) {
         return -1;
     }
 
     // 1. Assign GPU Objects
-    // VALIDATION: Ensure we actually got Program and VertexArray objects
     if (Py_TYPE(py_program) != state->ProgramType || Py_TYPE(py_vao) != state->VertexArrayType) {
         PyErr_SetString(PyExc_TypeError, "Pipeline requires Program and VertexArray instances.");
         return -1;
     }
 
     WithCaravanGL(module, OpenGL) {
-        self->program_ref = Py_NewRef(py_program);
-        self->vao_ref = Py_NewRef(py_vao);
+        // SAFE: Overwrites existing references if __init__ is called twice
+        // to prevent Python object memory leaks
+        Py_XSETREF(self->program_ref, Py_NewRef(py_program));
+        Py_XSETREF(self->vao_ref, Py_NewRef(py_vao));
 
         // EXTRACT raw IDs internally
         self->program = ((PyCaravanProgram *)py_program)->id;
@@ -48,12 +53,17 @@ PyCaravanGL_Status Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObje
         self->render_state.depth_write_mask = (bool)depth_write;
         self->render_state.depth_func = depth_func;
         self->render_state.blend_enabled = (bool)blend_enabled;
+        self->render_state.cull_face_enabled = (bool)cull_enabled;
 
         // 3. Initialize default draw params
         self->params = (CaravanDrawParams){
             .vertex_count = 0, .instance_count = 1, .first_vertex = 0, .base_instance = 0};
     }
 
+    // SAFE: Only track the object if the Python VM hasn't already tracked it
+    if (!PyObject_GC_IsTracked((PyObject *)self)) {
+        PyObject_GC_Track((PyObject *)self);
+    }
     return 0;
 }
 
@@ -87,12 +97,12 @@ PyCaravanGL_API Pipeline_upload_uniforms(PyCaravanPipeline *self, PyObject *cons
 PyCaravanGL_API Pipeline_draw(PyCaravanPipeline *self, [[maybe_unused]] PyObject *args) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
 
+    // 1. Predictable Early-Out: If vertex or instance count is 0, do nothing.
+    if (self->params.vertex_count == 0 || self->params.instance_count == 0) {
+        Py_RETURN_NONE;
+    }
+
     WithCaravanGL(mod, OpenGL) {
-        // 0. Predictable Early-Out: If vertex or instance count is 0, do nothing.
-        if (self->params.vertex_count == 0 || self->params.instance_count == 0)
-            [[clang::unlikely]] {
-            Py_RETURN_NONE;
-        }
 
         // 2. Bind core objects (These compile to near-zero cycles if already bound)
         cv_bind_program(state, self->program);
@@ -170,8 +180,10 @@ PyCaravanGL_Status Pipeline_clear(PyCaravanPipeline *self) {
 PyCaravanGL_Slot Pipeline_dealloc(PyCaravanPipeline *self) {
     PyTypeObject *type = Py_TYPE(self);
 
-    // Tell GC we are no longer tracking this instance
-    PyObject_GC_UnTrack(self);
+    // FIX: Safely check if initialization succeeded before untracking GC!
+    if (PyObject_GC_IsTracked((PyObject *)self)) {
+        PyObject_GC_UnTrack(self);
+    }
 
     // Call clear to decref members
     [[maybe_unused]] auto cleared = Pipeline_clear(self);
@@ -185,10 +197,6 @@ PyCaravanGL_Slot Pipeline_dealloc(PyCaravanPipeline *self) {
 PyCaravanGL_API Pipeline_get_params(PyCaravanPipeline *self, [[maybe_unused]] void *closure) {
     Py_buffer view;
 
-    // There are 4 GLuints in CaravanDrawParams
-    Py_ssize_t shape = sizeof(CaravanDrawParams) / sizeof(GLuint);
-    Py_ssize_t strides = sizeof(GLuint);
-
     view.buf = &self->params;
     view.obj = (PyObject *)self;
     view.len = sizeof(CaravanDrawParams);
@@ -196,8 +204,6 @@ PyCaravanGL_API Pipeline_get_params(PyCaravanPipeline *self, [[maybe_unused]] vo
     view.itemsize = sizeof(GLuint);
     view.format = "I"; // "I" is unsigned int
     view.ndim = 1;
-    view.shape = &shape;
-    view.strides = &strides;
     view.suboffsets = nullptr;
     view.internal = nullptr;
     self->params_shape[0] = sizeof(CaravanDrawParams) / sizeof(GLuint);
@@ -219,6 +225,7 @@ static const PyMethodDef Pipeline_methods[] = {
     {}};
 
 static const PyType_Slot Pipeline_slots[] = {
+    {Py_tp_new, PyType_GenericNew},
     {Py_tp_init, Pipeline_init},
     {Py_tp_dealloc, Pipeline_dealloc},
     {Py_tp_traverse, Pipeline_traverse},

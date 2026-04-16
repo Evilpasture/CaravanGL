@@ -81,29 +81,30 @@ PyCaravanGL_Status Buffer_init(PyCaravanBuffer *self, PyObject *args, PyObject *
 PyCaravanGL_API Buffer_write(PyCaravanBuffer *self, PyObject *const *args, Py_ssize_t nargs,
                              PyObject *kwnames) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
+    auto state = (CaravanState *)PyModule_GetState(mod);
+
+    PyObject *data = nullptr;
+    int offset = 0;
+    void *targets[BufWrite_COUNT] = {[IDX_BUF_WRITE_DATA] = (void *)&data,
+                                     [IDX_BUF_WRITE_OFFSET] = &offset};
+
+    if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.BufWriteParser, targets)) {
+        return nullptr;
+    }
+
+    Py_buffer view;
+    if (data == nullptr || PyObject_GetBuffer(data, &view, PyBUF_SIMPLE) != 0) {
+        PyErr_SetString(PyExc_TypeError, "data must support the buffer protocol");
+        return nullptr;
+    }
+
+    if (offset + view.len > self->buf.size) {
+        PyErr_SetString(PyExc_ValueError, "Data exceeds buffer size");
+        PyBuffer_Release(&view);
+        return nullptr;
+    }
 
     WithCaravanGL(mod, OpenGL) {
-        PyObject *data = nullptr;
-        int offset = 0;
-        void *targets[BufWrite_COUNT] = {[IDX_BUF_WRITE_DATA] = (void *)&data,
-                                         [IDX_BUF_WRITE_OFFSET] = &offset};
-
-        if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.BufWriteParser, targets)) {
-            return nullptr;
-        }
-
-        Py_buffer view;
-        if (data == nullptr || PyObject_GetBuffer(data, &view, PyBUF_SIMPLE) != 0) {
-            PyErr_SetString(PyExc_TypeError, "data must support the buffer protocol");
-            return nullptr;
-        }
-
-        if (offset + view.len > self->buf.size) {
-            PyErr_SetString(PyExc_ValueError, "Data exceeds buffer size");
-            PyBuffer_Release(&view);
-            return nullptr;
-        }
-
         OpenGL->BindBuffer(self->buf.target, self->buf.id);
         OpenGL->BufferSubData(self->buf.target, (GLintptr)offset, (GLsizeiptr)view.len, view.buf);
         PyBuffer_Release(&view);
@@ -118,14 +119,17 @@ PyCaravanGL_API Buffer_write(PyCaravanBuffer *self, PyObject *const *args, Py_ss
 PyCaravanGL_API Buffer_bind_base(PyCaravanBuffer *self, PyObject *const *args, Py_ssize_t nargs,
                                  PyObject *kwnames) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
+    auto state = (CaravanState *)PyModule_GetState(mod);
+
+    uint32_t index = 0;
+    void *targets[BufBind_COUNT] = {[IDX_BUF_BIND_IDX] = &index};
+
+    if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.BufBindParser, targets)) {
+        return nullptr;
+    }
 
     WithCaravanGL(mod, OpenGL) {
-        uint32_t index = 0;
-        void *targets[BufBind_COUNT] = {[IDX_BUF_BIND_IDX] = &index};
 
-        if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.BufBindParser, targets)) {
-            return nullptr;
-        }
         OpenGL->BindBufferBase(self->buf.target, index, self->buf.id);
     }
     Py_RETURN_NONE;

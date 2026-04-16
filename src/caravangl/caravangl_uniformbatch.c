@@ -20,9 +20,24 @@ PyCaravanGL_Status UniformBatch_init(PyCaravanUniformBatch *self, PyObject *args
     // Allocate the contiguous header (size + array of bindings)
     size_t header_size = sizeof(CaravanUniformHeader) + (sizeof(CaravanUniformBinding) * max_binds);
     self->header = (CaravanUniformHeader *)PyMem_Malloc(header_size);
+
+    // SAFEGUARD: Abort cleanly to Python if Out of Memory
+    if (self->header == nullptr) {
+        PyErr_NoMemory();
+        return -1;
+    }
     self->header->count = 0;
 
-    self->payload = (char *)PyMem_Calloc(1, max_bytes); // Zeroed out memory
+    self->payload = (char *)PyMem_Calloc(1, max_bytes);
+
+    // SAFEGUARD: Free previous allocation and throw error
+    if (self->payload == nullptr) {
+        PyMem_Free(self->header);
+        self->header = nullptr;
+        PyErr_NoMemory();
+        return -1;
+    }
+
     self->max_bindings = max_binds;
     self->max_payload_bytes = max_bytes;
     self->current_payload_offset = 0;

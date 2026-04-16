@@ -27,32 +27,32 @@ PyCaravanGL_Slot VertexArray_dealloc(PyCaravanVertexArray *self) {
 PyCaravanGL_API VertexArray_bind_attribute(PyCaravanVertexArray *self, PyObject *const *args,
                                            Py_ssize_t nargs, PyObject *kwnames) {
     PyObject *module = PyType_GetModule(Py_TYPE(self));
+    auto state = (CaravanState *)PyModule_GetState(module);
+    uint32_t location = 0;
+    uint32_t type = GL_FLOAT;
+    int size = 0;
+    int normalized = 0;
+    int stride = 0;
+    uintptr_t offset = 0;
+    PyObject *py_buffer = nullptr;
+
+    void *targets[VaoAttr_COUNT] = {
+        [IDX_VAO_ATTR_LOC] = &location,    [IDX_VAO_ATTR_BUF] = (void *)&py_buffer,
+        [IDX_VAO_ATTR_SIZE] = &size,       [IDX_VAO_ATTR_TYPE] = &type,
+        [IDX_VAO_ATTR_NORM] = &normalized, [IDX_VAO_ATTR_STRIDE] = &stride,
+        [IDX_VAO_ATTR_OFFSET] = &offset};
+
+    if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.VaoAttrParser, targets)) {
+        return nullptr;
+    }
+
+    // Verify it's actually our Buffer object
+    if (Py_TYPE(py_buffer) != state->BufferType) {
+        PyErr_SetString(PyExc_TypeError, "buffer must be a caravangl.Buffer");
+        return nullptr;
+    }
+    PyCaravanBuffer *buf = (PyCaravanBuffer *)py_buffer;
     WithCaravanGL(module, OpenGL) {
-        uint32_t location = 0;
-        uint32_t type = GL_FLOAT;
-        int size = 0;
-        int normalized = 0;
-        int stride = 0;
-        uintptr_t offset = 0;
-        PyObject *py_buffer = nullptr;
-
-        void *targets[VaoAttr_COUNT] = {
-            [IDX_VAO_ATTR_LOC] = &location,    [IDX_VAO_ATTR_BUF] = (void *)&py_buffer,
-            [IDX_VAO_ATTR_SIZE] = &size,       [IDX_VAO_ATTR_TYPE] = &type,
-            [IDX_VAO_ATTR_NORM] = &normalized, [IDX_VAO_ATTR_STRIDE] = &stride,
-            [IDX_VAO_ATTR_OFFSET] = &offset};
-
-        if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.VaoAttrParser, targets)) {
-            return nullptr;
-        }
-
-        // Verify it's actually our Buffer object
-        if (Py_TYPE(py_buffer) != state->BufferType) {
-            PyErr_SetString(PyExc_TypeError, "buffer must be a caravangl.Buffer");
-            return nullptr;
-        }
-        PyCaravanBuffer *buf = (PyCaravanBuffer *)py_buffer;
-
         // Bind VAO and VBO, then map the attribute
         OpenGL->BindVertexArray(self->id);
         OpenGL->BindBuffer(GL_ARRAY_BUFFER, buf->buf.id);

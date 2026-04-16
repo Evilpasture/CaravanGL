@@ -22,50 +22,49 @@
 
 /**
  * Queries GPU hardware limits and populates the state context.
- * Called once during caravan.init().
+ * Called once during caravan.init() (already inside the lock).
  */
-static void query_capabilities(PyObject *mod) {
-    WithCaravanGL(mod, OpenGL) {
-        if (OpenGL->GetIntegerv != nullptr) {
-            // Textures
-            OpenGL->GetIntegerv(GL_MAX_TEXTURE_SIZE, &state->ctx.caps.max_texture_size);
-            OpenGL->GetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &state->ctx.caps.max_3d_texture_size);
-            OpenGL->GetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS,
-                                &state->ctx.caps.max_array_texture_layers);
-            OpenGL->GetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS,
-                                &state->ctx.caps.max_texture_units);
+static void query_capabilities(CaravanState *state) {
+    CaravanGLTable *OpenGL = &state->gl;
 
-            // FBOs & Buffers
-            OpenGL->GetIntegerv(GL_MAX_SAMPLES, &state->ctx.caps.max_samples);
-            OpenGL->GetIntegerv(GL_MAX_COLOR_ATTACHMENTS, &state->ctx.caps.max_color_attachments);
-            OpenGL->GetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &state->ctx.caps.max_uniform_block_size);
-            OpenGL->GetIntegerv(GL_MAX_UNIFORM_BUFFER_BINDINGS, &state->ctx.caps.max_ubo_bindings);
+    if (OpenGL->GetIntegerv != nullptr) {
+        // Textures
+        OpenGL->GetIntegerv(GL_MAX_TEXTURE_SIZE, &state->ctx.caps.max_texture_size);
+        OpenGL->GetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &state->ctx.caps.max_3d_texture_size);
+        OpenGL->GetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &state->ctx.caps.max_array_texture_layers);
+        OpenGL->GetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS,
+                            &state->ctx.caps.max_texture_units);
 
-            // Viewport
-            GLint viewport[4] = {};
-            OpenGL->GetIntegerv(GL_VIEWPORT, viewport);
-            state->ctx.viewport = (CaravanRect){
-                .x = viewport[0], .y = viewport[1], .w = viewport[2], .h = viewport[3]};
-        }
+        // FBOs & Buffers
+        OpenGL->GetIntegerv(GL_MAX_SAMPLES, &state->ctx.caps.max_samples);
+        OpenGL->GetIntegerv(GL_MAX_COLOR_ATTACHMENTS, &state->ctx.caps.max_color_attachments);
+        OpenGL->GetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &state->ctx.caps.max_uniform_block_size);
+        OpenGL->GetIntegerv(GL_MAX_UNIFORM_BUFFER_BINDINGS, &state->ctx.caps.max_ubo_bindings);
+
+        // Viewport
+        GLint viewport[4] = {};
+        OpenGL->GetIntegerv(GL_VIEWPORT, viewport);
+        state->ctx.viewport =
+            (CaravanRect){.x = viewport[0], .y = viewport[1], .w = viewport[2], .h = viewport[3]};
+    }
 
 #ifndef __APPLE__
-        state->ctx.caps.support_compute = (OpenGL->DispatchCompute != nullptr);
-        state->ctx.caps.support_bindless = (OpenGL->GetTextureHandleARB != nullptr);
+    state->ctx.caps.support_compute = (OpenGL->DispatchCompute != nullptr);
+    state->ctx.caps.support_bindless = (OpenGL->GetTextureHandleARB != nullptr);
 
-        if (state->ctx.caps.support_compute && OpenGL->GetIntegerv != nullptr) {
-            OpenGL->GetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS,
-                                &state->ctx.caps.max_compute_work_group_invocations);
-            OpenGL->GetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE,
-                                &state->ctx.caps.max_shader_storage_block_size);
-        }
-#else
-        // Hardcode to false for Mac (OpenGL 4.1 limit)
-        state->ctx.caps.support_compute = false;
-        state->ctx.caps.support_bindless = false;
-        state->ctx.caps.max_compute_work_group_invocations = 0;
-        state->ctx.caps.max_shader_storage_block_size = 0;
-#endif
+    if (state->ctx.caps.support_compute && OpenGL->GetIntegerv != nullptr) {
+        OpenGL->GetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS,
+                            &state->ctx.caps.max_compute_work_group_invocations);
+        OpenGL->GetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE,
+                            &state->ctx.caps.max_shader_storage_block_size);
     }
+#else
+    // Hardcode to false for Mac (OpenGL 4.1 limit)
+    state->ctx.caps.support_compute = false;
+    state->ctx.caps.support_bindless = false;
+    state->ctx.caps.max_compute_work_group_invocations = 0;
+    state->ctx.caps.max_shader_storage_block_size = 0;
+#endif
 }
 
 // -----------------------------------------------------------------------------
@@ -90,7 +89,9 @@ PyCaravanGL_API caravan_init(PyObject *mod, PyObject *const *args, Py_ssize_t na
         if (load_gl(state, loader) < 0) {
             return nullptr;
         }
-        query_capabilities(mod);
+
+        // Pass the state directly instead of re-entering WithCaravanGL
+        query_capabilities(state);
     }
     Py_RETURN_NONE;
 }
@@ -222,21 +223,21 @@ PyCaravanGL_API caravan_clear(PyObject *mod, PyObject *const *args, Py_ssize_t n
 
 PyCaravanGL_API caravan_clear_color(PyObject *mod, PyObject *const *args, Py_ssize_t nargs,
                                     PyObject *kwnames) {
+    auto state = (CaravanState *)PyModule_GetState(mod);
+    float red = 0.0F;
+    float green = 0.0F;
+    float blue = 0.0F;
+    float alpha = 1.0F;
+    void *targets[ClearColor_COUNT] = {[IDX_CLR_C_R] = &red,
+                                       [IDX_CLR_C_G] = &green,
+                                       [IDX_CLR_C_B] = &blue,
+                                       [IDX_CLR_C_A] = &alpha};
+
+    if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.ClearColorParser, targets)) {
+        return nullptr;
+    }
+    const GLfloat color[] = {red, green, blue, alpha};
     WithCaravanGL(mod, OpenGL) {
-        float red = 0.0F;
-        float green = 0.0F;
-        float blue = 0.0F;
-        float alpha = 1.0F;
-        void *targets[ClearColor_COUNT] = {[IDX_CLR_C_R] = &red,
-                                           [IDX_CLR_C_G] = &green,
-                                           [IDX_CLR_C_B] = &blue,
-                                           [IDX_CLR_C_A] = &alpha};
-
-        if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.ClearColorParser, targets)) {
-            return nullptr;
-        }
-
-        const GLfloat color[] = {red, green, blue, alpha};
         OpenGL->ClearBufferfv(GL_COLOR, 0, color);
     }
     Py_RETURN_NONE;

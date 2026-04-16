@@ -24,17 +24,18 @@ static GLuint compile_shader(CaravanGLTable *OpenGL, GLenum type, const char *so
 
 PyCaravanGL_Status Program_init(PyCaravanProgram *self, PyObject *args, PyObject *kwds) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
+    auto state = (CaravanState *)PyModule_GetState(mod);
+    const char *vs_src = nullptr;
+    const char *fs_src = nullptr;
+
+    void *targets[ProgInit_COUNT] = {[IDX_PROG_VS] = (void *)&vs_src,
+                                     [IDX_PROG_FS] = (void *)&fs_src};
+
+    if (!FastParse_Unified(args, kwds, nullptr, &state->parsers.ProgInitParser, targets)) {
+        return -1;
+    }
+
     WithCaravanGL(mod, OpenGL) {
-        const char *vs_src = nullptr;
-        const char *fs_src = nullptr;
-
-        void *targets[ProgInit_COUNT] = {[IDX_PROG_VS] = (void *)&vs_src,
-                                         [IDX_PROG_FS] = (void *)&fs_src};
-
-        if (!FastParse_Unified(args, kwds, nullptr, &state->parsers.ProgInitParser, targets)) {
-            return -1;
-        }
-
         GLuint vertex_shader = compile_shader(OpenGL, GL_VERTEX_SHADER, vs_src);
         if (!vertex_shader) {
             return -1;
@@ -87,8 +88,8 @@ PyCaravanGL_API Program_get_uniform_location(PyCaravanProgram *self, PyObject *a
         return nullptr;
     }
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
+    const char *name = PyUnicode_AsUTF8(arg);
     WithCaravanGL(mod, OpenGL) {
-        const char *name = PyUnicode_AsUTF8(arg);
         GLint loc = OpenGL->GetUniformLocation(self->id, name);
         return PyLong_FromLong(loc);
     }

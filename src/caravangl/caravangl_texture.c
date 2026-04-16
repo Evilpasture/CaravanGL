@@ -3,14 +3,14 @@
 
 PyCaravanGL_Status Texture_init(PyCaravanTexture *self, PyObject *args, PyObject *kwds) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
+    auto state = (CaravanState *)PyModule_GetState(mod);
+    uint32_t target = GL_TEXTURE_2D;
+    void *targets[TexInit_COUNT] = {[IDX_TEX_TARGET] = &target};
+
+    if (!FastParse_Unified(args, kwds, nullptr, &state->parsers.TexInitParser, targets)) {
+        return -1;
+    }
     WithCaravanGL(mod, OpenGL) {
-        uint32_t target = GL_TEXTURE_2D;
-        void *targets[TexInit_COUNT] = {[IDX_TEX_TARGET] = &target};
-
-        if (!FastParse_Unified(args, kwds, nullptr, &state->parsers.TexInitParser, targets)) {
-            return -1;
-        }
-
         OpenGL->GenTextures(1, &self->tex.id);
         self->tex.target = target;
 
@@ -26,8 +26,8 @@ PyCaravanGL_Status Texture_init(PyCaravanTexture *self, PyObject *args, PyObject
 }
 
 PyCaravanGL_Slot Texture_dealloc(PyCaravanTexture *self) {
-    PyTypeObject *tp = Py_TYPE(self);
-    PyObject *mod = PyType_GetModule(tp);
+    PyTypeObject *type = Py_TYPE(self);
+    PyObject *mod = PyType_GetModule(type);
 
     WithCaravanGL(mod, OpenGL) {
         if (self->tex.id != 0) {
@@ -35,55 +35,55 @@ PyCaravanGL_Slot Texture_dealloc(PyCaravanTexture *self) {
             self->tex.id = 0;
         }
     }
-    tp->tp_free((PyObject *)self);
-    Py_DECREF(tp);
+    type->tp_free((PyObject *)self);
+    Py_DECREF(type);
 }
 
 PyCaravanGL_API Texture_upload(PyCaravanTexture *self, PyObject *const *args, Py_ssize_t nargs,
                                PyObject *kwnames) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
-    WithCaravanGL(mod, OpenGL) {
-        int level = 0;
-        int width = 0;
-        int height = 0;
-        int depth = 0;
-        uint32_t internal_format = 0;
-        uint32_t format = 0;
-        uint32_t type = 0;
-        PyObject *py_data = nullptr;
+    auto state = (CaravanState *)PyModule_GetState(mod);
+    int level = 0;
+    int width = 0;
+    int height = 0;
+    int depth = 0;
+    uint32_t internal_format = 0;
+    uint32_t format = 0;
+    uint32_t type = 0;
+    PyObject *py_data = nullptr;
 
-        void *targets[TexUpload_COUNT] = {[IDX_TEX_UPL_LEVEL] = (void *)(&level),
-                                          [IDX_TEX_UPL_W] = (void *)(&width),
-                                          [IDX_TEX_UPL_H] = (void *)(&height),
-                                          [IDX_TEX_UPL_D] = (void *)(&depth),
-                                          [IDX_TEX_UPL_IFMT] = (void *)(&internal_format),
-                                          [IDX_TEX_UPL_FMT] = (void *)(&format),
-                                          [IDX_TEX_UPL_TYPE] = (void *)(&type),
-                                          [IDX_TEX_UPL_DATA] = (void *)&py_data};
+    void *targets[TexUpload_COUNT] = {[IDX_TEX_UPL_LEVEL] = (void *)(&level),
+                                      [IDX_TEX_UPL_W] = (void *)(&width),
+                                      [IDX_TEX_UPL_H] = (void *)(&height),
+                                      [IDX_TEX_UPL_D] = (void *)(&depth),
+                                      [IDX_TEX_UPL_IFMT] = (void *)(&internal_format),
+                                      [IDX_TEX_UPL_FMT] = (void *)(&format),
+                                      [IDX_TEX_UPL_TYPE] = (void *)(&type),
+                                      [IDX_TEX_UPL_DATA] = (void *)&py_data};
 
-        if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.TexUploadParser, targets)) {
+    if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.TexUploadParser, targets)) {
+        return nullptr;
+    }
+
+    const void *ptr = nullptr;
+    Py_buffer view;
+    if (py_data && py_data != Py_None) {
+        if (PyObject_GetBuffer(py_data, &view, PyBUF_SIMPLE) == 0) {
+            ptr = view.buf;
+        } else {
+            PyErr_SetString(PyExc_TypeError, "Data must support the buffer protocol.");
             return nullptr;
         }
+    }
 
-        const void *ptr = nullptr;
-        Py_buffer view;
-        if (py_data && py_data != Py_None) {
-            if (PyObject_GetBuffer(py_data, &view, PyBUF_SIMPLE) == 0) {
-                ptr = view.buf;
-            } else {
-                PyErr_SetString(PyExc_TypeError, "Data must support the buffer protocol.");
-                return nullptr;
-            }
-        }
-
-        // Save metadata
-        self->tex.width = width;
-        self->tex.height = height;
-        self->tex.depth = depth;
-        self->tex.internal_format = internal_format;
-        self->tex.format = format;
-        self->tex.type = type;
-
+    // Save metadata
+    self->tex.width = width;
+    self->tex.height = height;
+    self->tex.depth = depth;
+    self->tex.internal_format = internal_format;
+    self->tex.format = format;
+    self->tex.type = type;
+    WithCaravanGL(mod, OpenGL) {
         // Force bind texture to unit 0 for upload
         cv_bind_texture(state, 0, &self->tex, 0);
 
@@ -113,14 +113,14 @@ PyCaravanGL_API Texture_upload(PyCaravanTexture *self, PyObject *const *args, Py
 PyCaravanGL_API Texture_bind(PyCaravanTexture *self, PyObject *const *args, Py_ssize_t nargs,
                              PyObject *kwnames) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
+    auto state = (CaravanState *)PyModule_GetState(mod);
+    uint32_t unit = 0;
+    void *targets[TexBind_COUNT] = {[IDX_TEX_BIND_UNIT] = &unit};
+
+    if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.TexBindParser, targets)) {
+        return nullptr;
+    }
     WithCaravanGL(mod, OpenGL) {
-        uint32_t unit = 0;
-        void *targets[TexBind_COUNT] = {[IDX_TEX_BIND_UNIT] = &unit};
-
-        if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.TexBindParser, targets)) {
-            return nullptr;
-        }
-
         // TODO(Evilpasture): Assuming Sampler Object is 0 for now until Sampler objects are added
         cv_bind_texture(state, unit, &self->tex, 0);
     }

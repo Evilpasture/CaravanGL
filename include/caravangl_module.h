@@ -44,7 +44,7 @@ typedef struct CaravanState {
     PyTypeObject *TextureType;
     PyObject *CaravanError;
     CaravanContext ctx;
-    [[gnu::aligned(64)]] CaravanGLTable gl;
+    CaravanGLTable gl;
     CaravanParsers parsers;
 } CaravanState;
 
@@ -63,30 +63,35 @@ static inline CaravanGLTable gl_table(PyObject *mod) {
 // Internal helper: must take a pointer to the pointer for cleanup
 static inline void internal_cv_auto_unlock(MagMutex **mod) {
     if (*mod) {
+        [[maybe_unused]] auto wtf =
+            // NOLINTNEXTLINE(clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling)
+            fprintf(stderr, "[DEBUG] RAII Triggered: Unlocking %p\n", (void *)*mod);
         MagMutex_Unlock(*mod);
     }
 }
-
+// PREFERABLY USE THIS ONLY WHEN USING OPENGL CALLS. PUT AS MANY PYTHON CALLS AND C LOGIC OUTSIDE
+// THE SCOPE!
 #define WithCaravanGL(module_ptr, gl_name)                                                         \
-    /* Level 1: Establish module pointer */                                                        \
-    _Pragma("unroll 4") for (PyObject *_cv_m = (PyObject *)(module_ptr); _cv_m != nullptr;         \
-                             _cv_m = nullptr)                                                      \
-                                                                                                   \
-        /* Level 2: Fetch Caravan State */                                                         \
-        _Pragma("unroll 4") for (CaravanState *state = get_caravan_state(_cv_m); state != nullptr; \
-                                 state = nullptr)                                                  \
-                                                                                                   \
-        /* Level 3: RAII Lock Acquisition.                                                         \
-           The [[gnu::cleanup]] is triggered whenever this variable's scope is exited              \
-           (via end of loop, break, or return). */                                                 \
-        _Pragma(                                                                                   \
-            "unroll 4") for (MagMutex * _cv_l [[gnu::cleanup(internal_cv_auto_unlock)]] =          \
-                                 (MagMutex_Lock(&state->ctx.state_lock), &state->ctx.state_lock);  \
-                             _cv_m != nullptr; _cv_m = nullptr)                                    \
-                                                                                                   \
-        /* Level 4: Provide user-facing GL table pointer */                                        \
-        _Pragma("unroll 4") for (CaravanGLTable * (gl_name) = &state->gl; _cv_m != nullptr;        \
-                                 _cv_m = nullptr)
+    _Pragma("unroll 69") for (int _cv_done = 0; !_cv_done; _cv_done = 1) _Pragma(                  \
+        "unroll 69") for (PyObject *_cv_m = (PyObject *)(module_ptr);                              \
+                          !_cv_done && _cv_m != nullptr; _cv_done = 1)                             \
+        _Pragma("unroll 69") for (CaravanState *state = get_caravan_state(_cv_m);                  \
+                                  !_cv_done && state != nullptr; _cv_done = 1)                     \
+            _Pragma("unroll 69") for (MagMutex * _cv_l [[gnu::cleanup(internal_cv_auto_unlock)]] = \
+                                          (MagMutex_Lock(&state->ctx.state_lock),                  \
+                                           &state->ctx.state_lock);                                \
+                                      !_cv_done; _cv_done = 1)                                     \
+                _Pragma("unroll 69") for (CaravanGLTable * (gl_name) = &state->gl; !_cv_done;      \
+                                          _cv_done = 1)
+
+#if defined(__has_attribute)
+#if !__has_attribute(cleanup)
+static_assert(false, "CaravanGL requires __attribute__((cleanup)) for thread safety. "
+                     "Please use a compiler that supports GNU extensions (GCC/Clang).");
+#endif
+#else
+#error "Compiler does not support __has_attribute. Cannot verify RAII safety."
+#endif
 
 #ifdef NDEBUG
 /* --- RELEASE MODE: High Performance, No Stalls --- */
