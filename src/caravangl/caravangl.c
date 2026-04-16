@@ -7,6 +7,7 @@
  * ============================================================================
  */
 
+#include "caravangl_state.h"
 #define PY_SSIZE_T_CLEAN
 #include "caravangl_arg_indices.h"
 #include "caravangl_loader.h"
@@ -249,6 +250,33 @@ PyCaravanGL_API caravan_meth_clear_color(PyObject *mod, PyObject *const *args, P
     }
     Py_RETURN_NONE;
 }
+
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+PyCaravanGL_API caravan_bind_default_framebuffer(PyObject *mod, [[maybe_unused]] PyObject *args) {
+    WithCaravanGL(mod, OpenGL) {
+        cv_bind_fbo_combined(state, 0); // 0 is always the screen
+    }
+    Py_RETURN_NONE;
+}
+
+PyCaravanGL_API caravan_viewport(PyObject *mod, PyObject *const *args, Py_ssize_t nargs,
+                                 PyObject *kwnames) {
+    CaravanState *state = get_caravan_state(mod);
+    int x = 0;
+    int y = 0;
+    int w = 0;
+    int h = 0;
+    void *targets[Viewport_COUNT] = {&x, &y, &w, &h};
+    if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.ViewportParser, targets)) {
+        return nullptr;
+    }
+
+    WithCaravanGL(mod, OpenGL) {
+        cv_bind_viewport(state, &(CaravanRect){x, y, w, h});
+    }
+    Py_RETURN_NONE;
+}
+
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 PyCaravanGL_API caravan_meth_enable_debug([[maybe_unused]] PyObject *mod,
                                           [[maybe_unused]] PyObject *args) {
@@ -302,6 +330,11 @@ static const PyMethodDef caravan_methods[] = {
      "Clear buffers (e.g. COLOR_BUFFER_BIT)"},
     {"clear_color", (PyCFunction)(void (*)(void))caravan_meth_clear_color,
      METH_FASTCALL | METH_KEYWORDS, "Set clear color"},
+    {"bind_default_framebuffer", (PyCFunction)caravan_bind_default_framebuffer, METH_NOARGS,
+     "Bind the main window screen."},
+    {"viewport", (PyCFunction)(void (*)(void))caravan_viewport, METH_FASTCALL | METH_KEYWORDS,
+     "Set the drawing region"},
+
     {}};
 
 // -----------------------------------------------------------------------------
@@ -326,6 +359,7 @@ static int init_types(PyObject *mod, CaravanState *state) {
         {&VertexArray_spec, (PyObject **)&state->VertexArrayType, "VertexArray"},
         {&UniformBatch_spec, (PyObject **)&state->UniformBatchType, "UniformBatch"},
         {&Texture_spec, (PyObject **)&state->TextureType, "Texture"},
+        {&Framebuffer_spec, (PyObject **)&state->FramebufferType, "Framebuffer"},
     };
 
     auto mod_name = PyUnicode_FromString("caravangl");
@@ -377,6 +411,23 @@ static int init_constants(PyObject *mod) {
                   {"UNSIGNED_SHORT", GL_UNSIGNED_SHORT},
                   {"UNSIGNED_INT", GL_UNSIGNED_INT},
                   {"UNSIGNED_BYTE", GL_UNSIGNED_BYTE},
+
+                  // --- Texture Constants ---
+                  {"TEXTURE_2D", GL_TEXTURE_2D},
+                  {"TEXTURE_3D", GL_TEXTURE_3D},
+                  {"RGBA", GL_RGBA},
+                  {"RGB", GL_RGB},
+                  {"RGBA8", GL_RGBA8},
+                  {"DEPTH_COMPONENT", GL_DEPTH_COMPONENT},
+                  {"DEPTH_COMPONENT24", GL_DEPTH_COMPONENT24},
+
+                  // --- Framebuffer Constants ---
+                  {"FRAMEBUFFER", GL_FRAMEBUFFER},
+                  {"COLOR_ATTACHMENT0", GL_COLOR_ATTACHMENT0},
+                  {"DEPTH_ATTACHMENT", GL_DEPTH_ATTACHMENT},
+                  {"DEPTH_STENCIL_ATTACHMENT", GL_DEPTH_STENCIL_ATTACHMENT},
+                  {"COLOR_BUFFER_BIT", GL_COLOR_BUFFER_BIT},
+                  {"DEPTH_BUFFER_BIT", GL_DEPTH_BUFFER_BIT},
 
                   // Build Metadata
                   {"FREE_THREADED",

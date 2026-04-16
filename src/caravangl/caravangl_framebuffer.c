@@ -1,0 +1,103 @@
+#include "caravangl_state.h"
+#include "pycaravangl.h"
+
+// -----------------------------------------------------------------------------
+// Framebuffer Object (FBO)
+// -----------------------------------------------------------------------------
+
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+PyCaravanGL_Status Framebuffer_init(PyCaravanFramebuffer *self, PyObject *args, PyObject *kwds) {
+    PyObject *mod = PyType_GetModule(Py_TYPE(self));
+    WithCaravanGL(mod, OpenGL) {
+        OpenGL->GenFramebuffers(1, &self->fbo.id);
+    }
+    return 0;
+}
+
+PyCaravanGL_Slot Framebuffer_dealloc(PyCaravanFramebuffer *self) {
+    PyTypeObject *type = Py_TYPE(self);
+    PyObject *mod = PyType_GetModule(type);
+    WithCaravanGL(mod, OpenGL) {
+        if (self->fbo.id) {
+            OpenGL->DeleteFramebuffers(1, &self->fbo.id);
+            self->fbo.id = 0;
+        }
+    }
+    type->tp_free((PyObject *)self);
+    Py_DECREF(type);
+}
+
+PyCaravanGL_API Framebuffer_attach_texture(PyCaravanFramebuffer *self, PyObject *const *args,
+                                           Py_ssize_t nargs, PyObject *kwnames) {
+    PyObject *mod = PyType_GetModule(Py_TYPE(self));
+    CaravanState *state = get_caravan_state(mod);
+
+    uint32_t attachment = 0;
+    PyObject *py_tex = nullptr;
+    int level = 0;
+
+    void *targets[FboAttach_COUNT] = {[IDX_FBO_ATT_ATTACH] = &attachment,
+                                      [IDX_FBO_ATT_TEX] = (void *)&py_tex,
+                                      [IDX_FBO_ATT_LEVEL] = &level};
+
+    if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.FboAttachParser, targets)) {
+        return nullptr;
+    }
+
+    if (Py_TYPE(py_tex) != state->TextureType) {
+        PyErr_SetString(PyExc_TypeError, "texture must be a caravangl.Texture");
+        return nullptr;
+    }
+
+    PyCaravanTexture *tex = (PyCaravanTexture *)py_tex;
+
+    WithCaravanGL(mod, OpenGL) {
+        cv_bind_fbo_combined(state, self->fbo.id);
+        OpenGL->FramebufferTexture2D(GL_FRAMEBUFFER, attachment, tex->tex.target, tex->tex.id,
+                                     level);
+    }
+    Py_RETURN_NONE;
+}
+
+PyCaravanGL_API Framebuffer_check_status(PyCaravanFramebuffer *self, PyObject *args) {
+    PyObject *mod = PyType_GetModule(Py_TYPE(self));
+    WithCaravanGL(mod, OpenGL) {
+        cv_bind_fbo_combined(state, self->fbo.id);
+        GLenum status = OpenGL->CheckFramebufferStatus(GL_FRAMEBUFFER);
+        if (status != GL_FRAMEBUFFER_COMPLETE) {
+            PyErr_Format(PyExc_RuntimeError, "Framebuffer not complete! GL Status Code: 0x%X",
+                         status);
+            return nullptr;
+        }
+    }
+    Py_RETURN_TRUE;
+}
+
+PyCaravanGL_API Framebuffer_bind(PyCaravanFramebuffer *self, PyObject *args) {
+    PyObject *mod = PyType_GetModule(Py_TYPE(self));
+    WithCaravanGL(mod, OpenGL) {
+        cv_bind_fbo_combined(state, self->fbo.id);
+    }
+    Py_RETURN_NONE;
+}
+
+static const PyMethodDef Framebuffer_methods[] = {
+    {"attach_texture", (PyCFunction)(void (*)(void))Framebuffer_attach_texture,
+     METH_FASTCALL | METH_KEYWORDS, "Attach a texture to the Framebuffer."},
+    {"check_status", (PyCFunction)Framebuffer_check_status, METH_NOARGS,
+     "Verify FBO completeness."},
+    {"bind", (PyCFunction)Framebuffer_bind, METH_NOARGS, "Bind as the active Framebuffer."},
+    {nullptr}};
+
+static const PyType_Slot Framebuffer_slots[] = {{Py_tp_new, (void *)PyType_GenericNew},
+                                                {Py_tp_init, Framebuffer_init},
+                                                {Py_tp_dealloc, Framebuffer_dealloc},
+                                                {Py_tp_methods, (PyMethodDef *)Framebuffer_methods},
+                                                {0, nullptr}};
+
+const PyType_Spec Framebuffer_spec = {
+    .name = "caravangl.Framebuffer",
+    .basicsize = sizeof(PyCaravanFramebuffer),
+    .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .slots = (PyType_Slot *)Framebuffer_slots,
+};

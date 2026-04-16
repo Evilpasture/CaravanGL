@@ -25,8 +25,41 @@ static inline void cv_bind_vao(CaravanState *state, GLuint vao) {
 [[gnu::always_inline, gnu::hot]]
 static inline void cv_bind_fbo_draw(CaravanState *state, GLuint fbo) {
     if (state->ctx.bound.fbo_draw != fbo) [[clang::unlikely]] {
-        state->ctx.bound.fbo_draw = fbo;
         state->gl.BindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
+        state->ctx.bound.fbo_draw = fbo;
+    }
+}
+
+[[gnu::always_inline, gnu::hot]]
+static inline void cv_bind_fbo_read(CaravanState *state, GLuint fbo) {
+    if (state->ctx.bound.fbo_read != fbo) [[clang::unlikely]] {
+        state->gl.BindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
+        state->ctx.bound.fbo_read = fbo;
+    }
+}
+
+[[gnu::always_inline, gnu::hot]]
+static inline void cv_bind_fbo_combined(CaravanState *state, GLuint fbo) {
+    if (state->ctx.bound.fbo_draw != fbo || state->ctx.bound.fbo_read != fbo) [[clang::unlikely]] {
+        state->gl.BindFramebuffer(GL_FRAMEBUFFER, fbo);
+        state->ctx.bound.fbo_draw = fbo;
+        state->ctx.bound.fbo_read = fbo;
+    }
+}
+
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+static inline void cv_bind_fbo(CaravanState *state, GLFramebufferTarget target, GLuint fbo) {
+    // Generalist function. Use specialized functions to avoid branching!
+    switch (target) {
+    case GL_FRAMEBUFFER:
+        cv_bind_fbo_combined(state, fbo);
+        break;
+    case GL_DRAW_FRAMEBUFFER:
+        cv_bind_fbo_draw(state, fbo);
+        break;
+    case GL_READ_FRAMEBUFFER:
+        cv_bind_fbo_read(state, fbo);
+        break;
     }
 }
 

@@ -116,3 +116,7 @@ typedef struct {
     uint32_t max_payload_bytes;
     uint32_t current_payload_offset;
 } PyCaravanUniformBatch;
+
+typedef struct {
+    PyObject_HEAD CaravanFramebuffer fbo;
+} PyCaravanFramebuffer;

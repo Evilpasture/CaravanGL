@@ -1255,6 +1255,7 @@ typedef enum ImageFormatTupleIndex : uint8_t {
     X(void, DeleteRenderbuffers, GLsizei n, const GLuint *renderbuffers)                           \
     X(void, GenRenderbuffers, GLsizei n, GLuint *renderbuffers)                                    \
     X(void, BindFramebuffer, GLenum target, GLuint framebuffer)                                    \
+    X(GLenum, CheckFramebufferStatus, GLenum target)                                               \
     X(void, DeleteFramebuffers, GLsizei n, const GLuint *framebuffers)                             \
     X(void, GenFramebuffers, GLsizei n, GLuint *framebuffers)                                      \
     X(void, FramebufferTexture2D, GLenum target, GLenum attachment, GLenum textarget,              \

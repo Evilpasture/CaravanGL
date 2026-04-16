@@ -70,6 +70,11 @@
 
 #define SCHEMA_TEX_BIND(X) X(IDX_TEX_BIND_UNIT, "unit", uint32_t, 1)
 
+#define SCHEMA_FBO_ATTACH(X)                                                                       \
+    X(IDX_FBO_ATT_ATTACH, "attachment", uint32_t, 1)                                               \
+    X(IDX_FBO_ATT_TEX, "texture", PyObject *, 1)                                                   \
+    X(IDX_FBO_ATT_LEVEL, "level", int, 0)
+
 #define SCHEMA_CLEAR(X) X(IDX_CLR_MASK, "mask", uint32_t, 1)
 
 #define SCHEMA_CLEAR_COLOR(X)                                                                      \
@@ -77,6 +82,12 @@
     X(IDX_CLR_C_G, "g", float, 1)                                                                  \
     X(IDX_CLR_C_B, "b", float, 1)                                                                  \
     X(IDX_CLR_C_A, "a", float, 1)
+
+#define SCHEMA_VIEWPORT(X)                                                                         \
+    X(IDX_VP_X, "x", int, 1)                                                                       \
+    X(IDX_VP_Y, "y", int, 1)                                                                       \
+    X(IDX_VP_W, "w", int, 1)                                                                       \
+    X(IDX_VP_H, "h", int, 1)
 
 /** --- THE GENERATOR ENGINE --- **/
 
@@ -100,8 +111,10 @@ DEFINE_INDEX_GROUP(UniformBatchAdd, SCHEMA_UB_ADD)
 DEFINE_INDEX_GROUP(TexInit, SCHEMA_TEX_INIT)
 DEFINE_INDEX_GROUP(TexUpload, SCHEMA_TEX_UPLOAD)
 DEFINE_INDEX_GROUP(TexBind, SCHEMA_TEX_BIND)
+DEFINE_INDEX_GROUP(FboAttach, SCHEMA_FBO_ATTACH)
 DEFINE_INDEX_GROUP(Clear, SCHEMA_CLEAR)
 DEFINE_INDEX_GROUP(ClearColor, SCHEMA_CLEAR_COLOR)
+DEFINE_INDEX_GROUP(Viewport, SCHEMA_VIEWPORT)
 
 // Master list of all parsers
 #define FOR_ALL_PARSERS(X)                                                                         \
@@ -118,8 +131,10 @@ DEFINE_INDEX_GROUP(ClearColor, SCHEMA_CLEAR_COLOR)
     X(TexInit, TexInit, SCHEMA_TEX_INIT)                                                           \
     X(TexUpload, TexUpload, SCHEMA_TEX_UPLOAD)                                                     \
     X(TexBind, TexBind, SCHEMA_TEX_BIND)                                                           \
+    X(FboAttach, FboAttach, SCHEMA_FBO_ATTACH)                                                     \
     X(Clear, Clear, SCHEMA_CLEAR)                                                                  \
-    X(ClearColor, ClearColor, SCHEMA_CLEAR_COLOR)
+    X(ClearColor, ClearColor, SCHEMA_CLEAR_COLOR)                                                  \
+    X(Viewport, Viewport, SCHEMA_VIEWPORT)
 
 // Macro to declare the struct members
 #define MAP_TO_DECLARE(ParserName, GroupName, Schema)                                              \
@@ -128,8 +143,7 @@ DEFINE_INDEX_GROUP(ClearColor, SCHEMA_CLEAR_COLOR)
 
 typedef struct CaravanParsers {
     [[gnu::aligned(128)]]
-    FOR_ALL_PARSERS(MAP_TO_DECLARE)
-    size_t registry_count;
+    FOR_ALL_PARSERS(MAP_TO_DECLARE) size_t registry_count;
 } CaravanParsers;
 
 void caravan_init_parsers(CaravanParsers *cp);
