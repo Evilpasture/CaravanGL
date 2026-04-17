@@ -66,20 +66,6 @@ static inline void internal_cv_auto_unlock(MagMutex **mod) {
         MagMutex_Unlock(*mod);
     }
 }
-// PREFERABLY USE THIS ONLY WHEN USING OPENGL CALLS. PUT AS MANY PYTHON CALLS AND C LOGIC OUTSIDE
-// THE SCOPE!
-#define WithCaravanGL(module_ptr, gl_name)                                                         \
-    _Pragma("unroll 69") for (int _cv_done = 0; !_cv_done; _cv_done = 1) _Pragma(                  \
-        "unroll 69") for (PyObject *_cv_m = (PyObject *)(module_ptr);                              \
-                          !_cv_done && _cv_m != nullptr; _cv_done = 1)                             \
-        _Pragma("unroll 69") for (CaravanState *state = get_caravan_state(_cv_m);                  \
-                                  !_cv_done && state != nullptr; _cv_done = 1)                     \
-            _Pragma("unroll 69") for (MagMutex * _cv_l [[gnu::cleanup(internal_cv_auto_unlock)]] = \
-                                          (MagMutex_Lock(&state->ctx.state_lock),                  \
-                                           &state->ctx.state_lock);                                \
-                                      !_cv_done; _cv_done = 1)                                     \
-                _Pragma("unroll 69") for (CaravanGLTable * (gl_name) = &state->gl; !_cv_done;      \
-                                          _cv_done = 1)
 
 // We add 'fail_val' so the macro knows what to return on error
 // (e.g., -1 for init, nullptr for methods)
@@ -193,10 +179,11 @@ static void APIENTRY opengl_debug_callback(GLenum source, GLenum type, GLuint id
         131218, // Shader recompilation
         131204, // Texture usage info
     };
-    #pragma unroll 4
+#pragma unroll 4
     for (size_t i = 0; i < sizeof(ignore_list) / sizeof(GLuint); ++i) {
-        if (id == ignore_list[i])
-           { return;}
+        if (id == ignore_list[i]) {
+            return;
+        }
     }
 
     const char *_src = "Unknown";
@@ -262,7 +249,7 @@ static void APIENTRY opengl_debug_callback(GLenum source, GLenum type, GLuint id
     case GL_DEBUG_SEVERITY_NOTIFICATION:
         _sev = "INFO";
         break;
-    default: 
+    default:
         break;
     }
 

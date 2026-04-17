@@ -498,7 +498,7 @@ PyCaravanGL_Status caravan_exec(PyObject *mod) {
     }
 
     // Zero out state and prepare fast-path parsers
-    state = (CaravanState *){};
+    *state = (CaravanState){};
 
     caravan_init_parsers(&state->parsers);
 
