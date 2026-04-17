@@ -1,3 +1,4 @@
+#include "fast_build.h"
 #include "pycaravangl.h"
 
 // -----------------------------------------------------------------------------
@@ -97,7 +98,7 @@ PyCaravanGL_API UniformBatch_add(PyCaravanUniformBatch *self, PyObject *const *a
     self->current_payload_offset += size;
 
     // Return the byte offset to Python so it knows where to write the data
-    return PyLong_FromUnsignedLong(offset);
+    return FastBuild_Value(offset);
 }
 
 PyCaravanGL_API UniformBatch_get_data(PyCaravanUniformBatch *self, [[maybe_unused]] void *closure) {

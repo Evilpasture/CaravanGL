@@ -1,3 +1,4 @@
+#include "caravangl_context.h"
 #include "caravangl_state.h"
 #include "pycaravangl.h"
 
@@ -7,24 +8,30 @@
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 PyCaravanGL_Status Framebuffer_init(PyCaravanFramebuffer *self, PyObject *args, PyObject *kwds) {
-    PyObject *mod = PyType_GetModule(Py_TYPE(self));
-    WithCaravanGL(mod, OpenGL) {
+    // No parsing needed for init, just context activation
+    WithActiveGL(OpenGL, cv_state, -1) {
+        self->owning_context = (PyCaravanContext *)Py_NewRef(_cv_ctx);
         OpenGL->GenFramebuffers(1, &self->fbo.id);
     }
     return 0;
 }
 
+static int Framebuffer_traverse(PyCaravanFramebuffer *self, visitproc visit, void *arg) {
+    Py_VISIT(self->owning_context);
+    return 0;
+}
+
+static int Framebuffer_clear(PyCaravanFramebuffer *self) {
+    Py_CLEAR(self->owning_context);
+    return 0;
+}
+
 PyCaravanGL_Slot Framebuffer_dealloc(PyCaravanFramebuffer *self) {
-    PyTypeObject *type = Py_TYPE(self);
-    PyObject *mod = PyType_GetModule(type);
-    WithCaravanGL(mod, OpenGL) {
-        if (self->fbo.id) {
-            OpenGL->DeleteFramebuffers(1, &self->fbo.id);
-            self->fbo.id = 0;
-        }
-    }
-    type->tp_free((PyObject *)self);
-    Py_DECREF(type);
+    // Thread-safe deferred deletion
+    CV_SAFE_DEALLOC(self, fbo.id, fbo_count, fbos, OpenGL->DeleteFramebuffers(1, &self->fbo.id));
+
+    Py_XDECREF(self->owning_context);
+    Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
 PyCaravanGL_API Framebuffer_attach_texture(PyCaravanFramebuffer *self, PyObject *const *args,
@@ -44,15 +51,19 @@ PyCaravanGL_API Framebuffer_attach_texture(PyCaravanFramebuffer *self, PyObject 
         return nullptr;
     }
 
-    if (Py_TYPE(py_tex) != state->TextureType) {
+    if (!Py_IS_TYPE(py_tex, state->TextureType)) {
         PyErr_SetString(PyExc_TypeError, "texture must be a caravangl.Texture");
         return nullptr;
     }
 
     PyCaravanTexture *tex = (PyCaravanTexture *)py_tex;
 
-    WithCaravanGL(mod, OpenGL) {
-        cv_bind_fbo_combined(state, self->fbo.id);
+    WithActiveGL(OpenGL, cv_state, nullptr) {
+        if (_cv_ctx != self->owning_context) [[clang::unlikely]] {
+            PyErr_SetString(PyExc_RuntimeError, "Framebuffer context mismatch.");
+            return nullptr;
+        }
+        cv_bind_fbo_combined(cv_state, OpenGL, self->fbo.id);
         OpenGL->FramebufferTexture2D(GL_FRAMEBUFFER, attachment, tex->tex.target, tex->tex.id,
                                      level);
 
@@ -100,14 +111,13 @@ PyCaravanGL_API Framebuffer_attach_texture(PyCaravanFramebuffer *self, PyObject 
 
 PyCaravanGL_API Framebuffer_check_status(PyCaravanFramebuffer *self,
                                          [[maybe_unused]] PyObject *args) {
-    PyObject *mod = PyType_GetModule(Py_TYPE(self));
     if (self->fbo.color_attachments_count == 0 && !self->fbo.has_depth) {
         PyErr_SetString(PyExc_RuntimeError, "Framebuffer has no attachments!");
         return nullptr;
     }
 
-    WithCaravanGL(mod, OpenGL) {
-        cv_bind_fbo_combined(state, self->fbo.id);
+    WithActiveGL(OpenGL, cv_state, nullptr) {
+        cv_bind_fbo_combined(cv_state, OpenGL, self->fbo.id);
         GLenum status = OpenGL->CheckFramebufferStatus(GL_FRAMEBUFFER);
         if (status != GL_FRAMEBUFFER_COMPLETE) {
             PyErr_Format(PyExc_RuntimeError, "Framebuffer not complete! GL Status Code: 0x%X",
@@ -118,10 +128,10 @@ PyCaravanGL_API Framebuffer_check_status(PyCaravanFramebuffer *self,
     Py_RETURN_TRUE;
 }
 
-PyCaravanGL_API Framebuffer_bind(PyCaravanFramebuffer *self, PyObject *args) {
-    PyObject *mod = PyType_GetModule(Py_TYPE(self));
-    WithCaravanGL(mod, OpenGL) {
-        cv_bind_fbo_combined(state, self->fbo.id);
+PyCaravanGL_API Framebuffer_bind(PyCaravanFramebuffer *self, [[maybe_unused]] PyObject *args) {
+    [[maybe_unused]] PyObject *mod = PyType_GetModule(Py_TYPE(self));
+    WithActiveGL(OpenGL, cv_state, nullptr) {
+        cv_bind_fbo_combined(cv_state, OpenGL, self->fbo.id);
     }
     Py_RETURN_NONE;
 }

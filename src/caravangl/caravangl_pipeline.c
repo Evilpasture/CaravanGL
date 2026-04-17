@@ -1,37 +1,36 @@
+#include "caravangl_context.h"
 #include "caravangl_state.h"
 #include "pycaravangl.h"
 
 PyCaravanGL_Status Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObject *kwds) {
     PyObject *module = PyType_GetModule(Py_TYPE(self));
-    CaravanState *state = (CaravanState *)PyModule_GetState(module);
+    CaravanState *state = get_caravan_state(module);
 
-    // Variables to parse into
     PyObject *py_program = nullptr;
     PyObject *py_vao = nullptr;
     uint32_t topology = GL_TRIANGLES;
-    uint32_t index_type = 0; // 0 means draw arrays (no index buffer)
+    uint32_t index_type = 0;
 
     // Render State defaults
     int depth_test = 0;
     int depth_write = 1;
-    uint32_t depth_func = GL_LESS;
-    int blend_enabled = 0;
-    int cull_enabled = 0;
-
-    // Stencil Defaults
-    int stencil_test = 0;
-    uint32_t stencil_func = GL_ALWAYS;
-    int stencil_ref = 0;
-    uint32_t stencil_read_mask = 0xFFFFFFFF;
-    uint32_t stencil_write_mask = 0xFFFFFFFF;
-    uint32_t stencil_fail = GL_KEEP;
-    uint32_t stencil_zfail = GL_KEEP;
-    uint32_t stencil_zpass = GL_KEEP;
-
     int cull = 0;
+    int stencil_test = 0;
+    int blend = 0;
+    uint32_t depth_func = GL_LESS;
     uint32_t cull_mode = GL_BACK;
     uint32_t front_face = GL_CCW;
-    int blend = 0;
+
+    // Stencil Defaults
+    uint32_t s_func = GL_ALWAYS;
+    uint32_t s_read = 0xFFFFFFFF;
+    uint32_t s_write = 0xFFFFFFFF;
+    int s_ref = 0;
+    uint32_t s_fail = GL_KEEP;
+    uint32_t s_zfail = GL_KEEP;
+    uint32_t s_zpass = GL_KEEP;
+
+    // Blend Defaults
     uint32_t b_src_rgb = GL_SRC_ALPHA;
     uint32_t b_dst_rgb = GL_ONE_MINUS_SRC_ALPHA;
     uint32_t b_src_a = GL_ONE;
@@ -39,92 +38,86 @@ PyCaravanGL_Status Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObje
     uint32_t b_eq_rgb = GL_FUNC_ADD;
     uint32_t b_eq_a = GL_FUNC_ADD;
 
-    void *targets[PipelineInit_COUNT] = {
-        [IDX_PL_PROGRAM] = (void *)&py_program,
-        [IDX_PL_VAO] = (void *)&py_vao,
-        [IDX_PL_TOPO] = (void *)&topology,
-        [IDX_PL_IDX_TYP] = (void *)&index_type,
-        [IDX_PL_DEPTH] = (void *)&depth_test,
-        [IDX_PL_DWRITE] = (void *)&depth_write,
-        [IDX_PL_DFUNC] = (void *)&depth_func,
-        [IDX_PL_CULL] = (void *)&cull,
-        [IDX_PL_CULL_MODE] = (void *)&cull_mode,
-        [IDX_PL_STENCIL] = (void *)&stencil_test,
-        [IDX_PL_SFUNC] = (void *)&stencil_func,
-        [IDX_PL_SREF] = (void *)&stencil_ref,
-        [IDX_PL_SRMASK] = (void *)&stencil_read_mask,
-        [IDX_PL_SWMASK] = (void *)&stencil_write_mask,
-        [IDX_PL_SFAIL] = (void *)&stencil_fail,
-        [IDX_PL_SZFAIL] = (void *)&stencil_zfail,
-        [IDX_PL_SZPASS] = (void *)&stencil_zpass,
-        [IDX_PL_BLEND] = (void *)&blend,
-        [IDX_PL_B_SRC_RGB] = (void *)&b_src_rgb,
-        [IDX_PL_B_DST_RGB] = (void *)&b_dst_rgb,
-        [IDX_PL_B_SRC_A] = (void *)&b_src_a,
-        [IDX_PL_B_DST_A] = (void *)&b_dst_a,
-        [IDX_PL_B_EQ_RGB] = (void *)&b_eq_rgb,
-        [IDX_PL_B_EQ_A] = (void *)&b_eq_a,
-        [IDX_PL_FRONT_FACE] = &front_face,
-    };
+    void *targets[PipelineInit_COUNT] = {[IDX_PL_PROGRAM] = (void *)&py_program,
+                                         [IDX_PL_VAO] = (void *)&py_vao,
+                                         [IDX_PL_TOPO] = &topology,
+                                         [IDX_PL_IDX_TYP] = &index_type,
+                                         [IDX_PL_DEPTH] = &depth_test,
+                                         [IDX_PL_DWRITE] = &depth_write,
+                                         [IDX_PL_DFUNC] = &depth_func,
+                                         [IDX_PL_CULL] = &cull,
+                                         [IDX_PL_CULL_MODE] = &cull_mode,
+                                         [IDX_PL_FRONT_FACE] = &front_face,
+                                         [IDX_PL_STENCIL] = &stencil_test,
+                                         [IDX_PL_SFUNC] = &s_func,
+                                         [IDX_PL_SREF] = &s_ref,
+                                         [IDX_PL_SRMASK] = &s_read,
+                                         [IDX_PL_SWMASK] = &s_write,
+                                         [IDX_PL_SFAIL] = &s_fail,
+                                         [IDX_PL_SZFAIL] = &s_zfail,
+                                         [IDX_PL_SZPASS] = &s_zpass,
+                                         [IDX_PL_BLEND] = &blend,
+                                         [IDX_PL_B_SRC_RGB] = &b_src_rgb,
+                                         [IDX_PL_B_DST_RGB] = &b_dst_rgb,
+                                         [IDX_PL_B_SRC_A] = &b_src_a,
+                                         [IDX_PL_B_DST_A] = &b_dst_a,
+                                         [IDX_PL_B_EQ_RGB] = &b_eq_rgb,
+                                         [IDX_PL_B_EQ_A] = &b_eq_a};
 
     if (!FastParse_Unified(args, kwds, nullptr, &state->parsers.PipelineInitParser, targets)) {
         return -1;
     }
 
-    // 1. Assign GPU Objects
-    if (Py_TYPE(py_program) != state->ProgramType || Py_TYPE(py_vao) != state->VertexArrayType) {
+    if (!Py_IS_TYPE(py_program, state->ProgramType) ||
+        !Py_IS_TYPE(py_vao, state->VertexArrayType)) {
         PyErr_SetString(PyExc_TypeError, "Pipeline requires Program and VertexArray instances.");
         return -1;
     }
 
-    WithCaravanGL(module, OpenGL) {
-        // 1. Manage Python Object References
-        // Using Py_XSETREF is correct because tp_alloc zero-initializes members to NULL.
+    WithActiveGL(OpenGL, cv_state, -1) {
+        // 1. Ownership & References
+        self->owning_context = (PyCaravanContext *)Py_NewRef(_cv_ctx);
         Py_XSETREF(self->program_ref, Py_NewRef(py_program));
         Py_XSETREF(self->vao_ref, Py_NewRef(py_vao));
 
-        // 2. Extract raw IDs for the C-path
+        // 2. VAO Context Validation: VAOs cannot be shared!
+        if (((PyCaravanVertexArray *)py_vao)->owning_context != _cv_ctx) {
+            PyErr_SetString(PyExc_RuntimeError, "VertexArray belongs to a different Context.");
+            return -1;
+        }
+
         self->program = ((PyCaravanProgram *)py_program)->id;
         self->vao = ((PyCaravanVertexArray *)py_vao)->id;
         self->topology = topology;
         self->index_type = index_type;
 
-        // 3. Initialize default draw params
+        // 3. Baked Render State
+        self->render_state = (CaravanRenderState){.depth_test_enabled = (bool)depth_test,
+                                                  .depth_write_mask = (bool)depth_write,
+                                                  .depth_func = depth_func,
+                                                  .stencil_test_enabled = (bool)stencil_test,
+                                                  .stencil_func = s_func,
+                                                  .stencil_ref = s_ref,
+                                                  .stencil_read_mask = s_read,
+                                                  .stencil_write_mask = s_write,
+                                                  .stencil_fail_op = s_fail,
+                                                  .stencil_zfail_op = s_zfail,
+                                                  .stencil_zpass_op = s_zpass,
+                                                  .cull_face_enabled = (bool)cull,
+                                                  .cull_face_mode = cull_mode,
+                                                  .front_face = front_face,
+                                                  .blend_enabled = (bool)blend,
+                                                  .blend_src_rgb = b_src_rgb,
+                                                  .blend_dst_rgb = b_dst_rgb,
+                                                  .blend_src_alpha = b_src_a,
+                                                  .blend_dst_alpha = b_dst_a,
+                                                  .blend_eq_rgb = b_eq_rgb,
+                                                  .blend_eq_alpha = b_eq_a};
+
         self->params = (CaravanDrawParams){
             .vertex_count = 0, .instance_count = 1, .first_vertex = 0, .base_instance = 0};
-
-        // 4. Pack the Render State
-        // --- Depth ---
-        self->render_state.depth_test_enabled = (bool)depth_test;
-        self->render_state.depth_write_mask = (bool)depth_write;
-        self->render_state.depth_func = depth_func;
-
-        // --- Stencil ---
-        self->render_state.stencil_test_enabled = (bool)stencil_test;
-        self->render_state.stencil_func = stencil_func;
-        self->render_state.stencil_ref = stencil_ref;
-        self->render_state.stencil_read_mask = stencil_read_mask;
-        self->render_state.stencil_write_mask = stencil_write_mask;
-        self->render_state.stencil_fail_op = stencil_fail;
-        self->render_state.stencil_zfail_op = stencil_zfail;
-        self->render_state.stencil_zpass_op = stencil_zpass;
-
-        // --- Culling ---
-        self->render_state.cull_face_enabled = (bool)cull; // Use the name from 'targets'
-        self->render_state.cull_face_mode = cull_mode;
-        self->render_state.front_face = front_face;
-
-        // --- Blending ---
-        self->render_state.blend_enabled = (bool)blend; // Use the name from 'targets'
-        self->render_state.blend_src_rgb = b_src_rgb;
-        self->render_state.blend_dst_rgb = b_dst_rgb;
-        self->render_state.blend_src_alpha = b_src_a;
-        self->render_state.blend_dst_alpha = b_dst_a;
-        self->render_state.blend_eq_rgb = b_eq_rgb;
-        self->render_state.blend_eq_alpha = b_eq_a;
     }
 
-    // SAFE: Only track the object if the Python VM hasn't already tracked it
     if (!PyObject_GC_IsTracked((PyObject *)self)) {
         PyObject_GC_Track((PyObject *)self);
     }
@@ -134,7 +127,7 @@ PyCaravanGL_Status Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObje
 PyCaravanGL_API Pipeline_upload_uniforms(PyCaravanPipeline *self, PyObject *const *args,
                                          Py_ssize_t nargs, PyObject *kwnames) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
-    CaravanState *state = get_caravan_state(mod);
+    auto state = get_caravan_state(mod);
 
     PyObject *py_batch = nullptr;
     void *targets[PipelineUniforms_COUNT] = {[IDX_PL_U_BATCH] = (void *)&py_batch};
@@ -143,73 +136,56 @@ PyCaravanGL_API Pipeline_upload_uniforms(PyCaravanPipeline *self, PyObject *cons
         return nullptr;
     }
 
-    if (Py_TYPE(py_batch) != state->UniformBatchType) {
+    if (!Py_IS_TYPE(py_batch, state->UniformBatchType)) {
         PyErr_SetString(PyExc_TypeError, "Expected UniformBatch object.");
         return nullptr;
     }
 
     PyCaravanUniformBatch *batch = (PyCaravanUniformBatch *)py_batch;
 
-    WithCaravanGL(mod, OpenGL) {
-        cv_bind_program(state, self->program);
+    WithActiveGL(OpenGL, cv_state, nullptr) {
+        cv_bind_program(cv_state, OpenGL, self->program);
         cv_upload_uniform_batch(
-            state, (CaravanUniformSource){.header = batch->header, .payload = batch->payload});
+            OpenGL, (CaravanUniformSource){.header = batch->header, .payload = batch->payload});
     }
     Py_RETURN_NONE;
 }
 
 PyCaravanGL_API Pipeline_draw(PyCaravanPipeline *self, [[maybe_unused]] PyObject *args) {
-    PyObject *mod = PyType_GetModule(Py_TYPE(self));
-
-    // 1. Predictable Early-Out: If vertex or instance count is 0, do nothing.
     if (self->params.vertex_count == 0 || self->params.instance_count == 0) {
         Py_RETURN_NONE;
     }
 
-    WithCaravanGL(mod, OpenGL) {
+    WithActiveGL(OpenGL, cv_state, nullptr) {
+        // Validation: Ensure we aren't trying to draw a context-local VAO in the wrong context
+        if (_cv_ctx != self->owning_context) [[clang::unlikely]] {
+            PyErr_SetString(PyExc_RuntimeError, "Pipeline draw context mismatch (VAO is local).");
+            return nullptr;
+        }
 
-        // 2. Bind core objects (These compile to near-zero cycles if already bound)
-        cv_bind_program(state, self->program);
-        cv_bind_vao(state, self->vao);
+        cv_bind_program(cv_state, OpenGL, self->program);
+        cv_bind_vao(cv_state, OpenGL, self->vao);
+        cv_sync_render_state(cv_state, OpenGL, &self->render_state);
 
-        // One single call to sync the entire GPU state machine configuration
-        cv_sync_render_state(state, &self->render_state);
-
-        // ... Apply blend state, cull state, etc. ...
-
-        // 4. Dispatch the Draw Call
         if (self->index_type != 0) {
-            // Indexed Drawing (glDrawElements)
-
-            // PREDICTABILITY FIX: Convert 'first_vertex' (element index) into a byte offset
             uintptr_t byte_offset = 0;
-            switch (self->index_type) {
-            case GL_UNSIGNED_INT:
-                byte_offset = self->params.first_vertex * sizeof(GLuint);
-                break;
-            case GL_UNSIGNED_SHORT:
-                byte_offset = self->params.first_vertex * sizeof(GLushort);
-                break;
-            case GL_UNSIGNED_BYTE:
-                byte_offset = self->params.first_vertex * sizeof(GLubyte);
-                break;
-            default:
-                byte_offset = 0;
-                break;
+            if (self->index_type == GL_UNSIGNED_INT) {
+                byte_offset = (uintptr_t)self->params.first_vertex * 4;
+            } else if (self->index_type == GL_UNSIGNED_SHORT) {
+                byte_offset = (uintptr_t)self->params.first_vertex * 2;
+            } else {
+                byte_offset = self->params.first_vertex;
             }
-            void *index_ptr = IntToPtr(byte_offset);
 
             if (self->params.instance_count > 1) {
                 OpenGL->DrawElementsInstanced(self->topology, (GLsizei)self->params.vertex_count,
-                                              self->index_type, index_ptr,
+                                              self->index_type, IntToPtr(byte_offset),
                                               (GLsizei)self->params.instance_count);
             } else {
                 OpenGL->DrawElements(self->topology, (GLsizei)self->params.vertex_count,
-                                     self->index_type, index_ptr);
+                                     self->index_type, IntToPtr(byte_offset));
             }
         } else {
-            // Array Drawing (glDrawArrays)
-
             if (self->params.instance_count > 1) {
                 OpenGL->DrawArraysInstanced(self->topology, (GLsizei)self->params.first_vertex,
                                             (GLsizei)self->params.vertex_count,
@@ -223,37 +199,31 @@ PyCaravanGL_API Pipeline_draw(PyCaravanPipeline *self, [[maybe_unused]] PyObject
     Py_RETURN_NONE;
 }
 
-/**
- * Pipeline Deallocator
- */
 PyCaravanGL_Status Pipeline_traverse(PyCaravanPipeline *self, visitproc visit, void *arg) {
-    PyObject **members[] = {&self->program_ref, &self->vao_ref};
-    TraverseContext context = {.visit = visit, .arg = arg};
-
-    return caravan_dispatch_members(members, 2, op_visit_member, &context);
+    Py_VISIT(self->program_ref);
+    Py_VISIT(self->vao_ref);
+    Py_VISIT(self->owning_context);
+    return 0;
 }
 
 PyCaravanGL_Status Pipeline_clear(PyCaravanPipeline *self) {
-    PyObject **members[] = {&self->program_ref, &self->vao_ref};
-
-    return caravan_dispatch_members(members, 2, op_clear_member, nullptr);
+    Py_CLEAR(self->program_ref);
+    Py_CLEAR(self->vao_ref);
+    Py_CLEAR(self->owning_context);
+    return 0;
 }
 
-// 3. Updated Dealloc: Must notify GC before freeing memory
 PyCaravanGL_Slot Pipeline_dealloc(PyCaravanPipeline *self) {
     PyTypeObject *type = Py_TYPE(self);
-
-    // FIX: Safely check if initialization succeeded before untracking GC!
     if (PyObject_GC_IsTracked((PyObject *)self)) {
         PyObject_GC_UnTrack(self);
     }
-
-    // Call clear to decref members
-    [[maybe_unused]] auto cleared = Pipeline_clear(self);
-
+    (void)Pipeline_clear(self);
     type->tp_free((PyObject *)self);
     Py_DECREF(type);
 }
+
+// ... getter for params remains the same ...
 /**
  * Getter for .params: Exposes the memoryview for zero-copy mutation
  */

@@ -1,3 +1,4 @@
+#include "caravangl_context.h"
 #include "pycaravangl.h"
 
 // -----------------------------------------------------------------------------
@@ -5,29 +6,24 @@
 // -----------------------------------------------------------------------------
 
 PyCaravanGL_Status VertexArray_init(PyCaravanVertexArray *self, [[maybe_unused]] PyObject *args) {
-    PyObject *module = PyType_GetModule(Py_TYPE(self));
-    WithCaravanGL(module, OpenGL) {
+    WithActiveGL(OpenGL, cv_state, -1) {
+        self->owning_context = (PyCaravanContext *)Py_NewRef(_cv_ctx);
         OpenGL->GenVertexArrays(1, &self->id);
     }
     return 0;
 }
 
 PyCaravanGL_Slot VertexArray_dealloc(PyCaravanVertexArray *self) {
-    PyTypeObject *type = Py_TYPE(self);
-    PyObject *module = PyType_GetModule(type);
-    WithCaravanGL(module, OpenGL) {
-        if (self->id) {
-            OpenGL->DeleteVertexArrays(1, &self->id);
-        }
-    }
-    type->tp_free((PyObject *)self);
-    Py_DECREF(type);
+    CV_SAFE_DEALLOC(self, id, vao_count, vaos, OpenGL->DeleteVertexArrays(1, &self->id));
+    Py_XDECREF(self->owning_context);
+    Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
 PyCaravanGL_API VertexArray_bind_attribute(PyCaravanVertexArray *self, PyObject *const *args,
                                            Py_ssize_t nargs, PyObject *kwnames) {
     PyObject *module = PyType_GetModule(Py_TYPE(self));
-    auto state = (CaravanState *)PyModule_GetState(module);
+    auto state = get_caravan_state(module);
+
     uint32_t location = 0;
     uint32_t type = GL_FLOAT;
     int size = 0;
@@ -35,7 +31,7 @@ PyCaravanGL_API VertexArray_bind_attribute(PyCaravanVertexArray *self, PyObject 
     int stride = 0;
     uintptr_t offset = 0;
     PyObject *py_buffer = nullptr;
-    uint32_t divisor = 0; // Default to 0 (per-vertex)
+    uint32_t divisor = 0;
 
     void *targets[VaoAttr_COUNT] = {
         [IDX_VAO_ATTR_LOC] = &location,    [IDX_VAO_ATTR_BUF] = (void *)&py_buffer,
@@ -47,40 +43,63 @@ PyCaravanGL_API VertexArray_bind_attribute(PyCaravanVertexArray *self, PyObject 
         return nullptr;
     }
 
-    // Verify it's actually our Buffer object
-    if (Py_TYPE(py_buffer) != state->BufferType) {
-        PyErr_SetString(PyExc_TypeError, "buffer must be a caravangl.Buffer");
+    // 1. Strict Type Check for the Buffer
+    if (!Py_IS_TYPE(py_buffer, state->BufferType)) {
+        PyErr_Format(PyExc_TypeError, "buffer must be a caravangl.Buffer, not %.200s",
+                     Py_TYPE(py_buffer)->tp_name);
         return nullptr;
     }
     PyCaravanBuffer *buf = (PyCaravanBuffer *)py_buffer;
-    WithCaravanGL(module, OpenGL) {
-        // Bind VAO and VBO, then map the attribute
+
+    // 2. Context Safety
+    WithActiveGL(OpenGL, cv_state, nullptr) {
+        // IMPORTANT: VAOs are container objects that belong to a specific context.
+        // They are NOT shared. If this context isn't the one that created the VAO, crash.
+        if (_cv_ctx != self->owning_context) [[clang::unlikely]] {
+            PyErr_SetString(PyExc_RuntimeError,
+                            "VertexArray cannot be modified by a context other than its creator.");
+            return nullptr;
+        }
+
         OpenGL->BindVertexArray(self->id);
+
+        // VBOs are shared across contexts, so buf->buf.id is safe to use here.
         OpenGL->BindBuffer(GL_ARRAY_BUFFER, buf->buf.id);
 
         OpenGL->EnableVertexAttribArray(location);
         OpenGL->VertexAttribPointer(location, size, type, normalized ? GL_TRUE : GL_FALSE, stride,
                                     IntToPtr(offset));
 
-        // Tells GL how many instances to draw before moving to the next element in this buffer
         OpenGL->VertexAttribDivisor(location, divisor);
 
-        // Unbind VAO to prevent accidental corruption
+        // Clean up binding state to prevent accidental state corruption
         OpenGL->BindVertexArray(0);
+        OpenGL->BindBuffer(GL_ARRAY_BUFFER, 0);
     }
     Py_RETURN_NONE;
 }
 
 PyCaravanGL_API VertexArray_bind_index_buffer(PyCaravanVertexArray *self, PyObject *arg) {
     PyObject *module = PyType_GetModule(Py_TYPE(self));
-    WithCaravanGL(module, OpenGL) {
-        if (Py_TYPE(arg) != state->BufferType) {
-            PyErr_SetString(PyExc_TypeError, "Expected a caravangl.Buffer");
+    auto state = get_caravan_state(module);
+
+    if (!Py_IS_TYPE(arg, state->BufferType)) {
+        PyErr_SetString(PyExc_TypeError, "Expected a caravangl.Buffer");
+        return nullptr;
+    }
+    PyCaravanBuffer *buf = (PyCaravanBuffer *)arg;
+
+    WithActiveGL(OpenGL, cv_state, nullptr) {
+        if (_cv_ctx != self->owning_context) [[clang::unlikely]] {
+            PyErr_SetString(PyExc_RuntimeError, "VAO context mismatch.");
             return nullptr;
         }
-        PyCaravanBuffer *buf = (PyCaravanBuffer *)arg;
+
         OpenGL->BindVertexArray(self->id);
+
+        // GL_ELEMENT_ARRAY_BUFFER binding is stored INSIDE the VAO state.
         OpenGL->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, buf->buf.id);
+
         OpenGL->BindVertexArray(0);
     }
     Py_RETURN_NONE;

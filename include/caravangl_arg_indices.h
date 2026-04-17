@@ -114,6 +114,10 @@
     X(IDX_SAMP_WRAP_S, "wrap_s", uint32_t, 0)                                                      \
     X(IDX_SAMP_WRAP_T, "wrap_t", uint32_t, 0)
 
+#define SCHEMA_CONTEXT_INIT(X)                                                                     \
+    X(IDX_CTX_LOADER, "loader", PyObject *, 1)                                                     \
+    X(IDX_CTX_CALLBACK, "make_current_cb", PyObject *, 0)
+
 /** --- THE GENERATOR ENGINE --- **/
 
 #define GEN_ENUM(ID, NAME, TYPE, REQ) ID,
@@ -141,9 +145,11 @@ DEFINE_INDEX_GROUP(Clear, SCHEMA_CLEAR)
 DEFINE_INDEX_GROUP(ClearColor, SCHEMA_CLEAR_COLOR)
 DEFINE_INDEX_GROUP(Viewport, SCHEMA_VIEWPORT)
 DEFINE_INDEX_GROUP(SamplerInit, SCHEMA_SAMPLER_INIT)
+DEFINE_INDEX_GROUP(ContextInit, SCHEMA_CONTEXT_INIT)
 
 // Master list of all parsers
 #define FOR_ALL_PARSERS(X)                                                                         \
+    X(ContextInit, ContextInit, SCHEMA_CONTEXT_INIT)                                               \
     X(Init, Init, SCHEMA_INIT)                                                                     \
     X(BufInit, BufInit, SCHEMA_BUF_INIT)                                                           \
     X(BufWrite, BufWrite, SCHEMA_BUF_WRITE)                                                        \

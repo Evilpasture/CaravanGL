@@ -1,61 +1,72 @@
+#include "caravangl_context.h"
 #include "caravangl_state.h"
 #include "pycaravangl.h"
 
 PyCaravanGL_Status Texture_init(PyCaravanTexture *self, PyObject *args, PyObject *kwds) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
     auto state = get_caravan_state(mod);
+
     uint32_t target = GL_TEXTURE_2D;
     void *targets[TexInit_COUNT] = {[IDX_TEX_TARGET] = &target};
 
     if (!FastParse_Unified(args, kwds, nullptr, &state->parsers.TexInitParser, targets)) {
         return -1;
     }
-    WithCaravanGL(mod, OpenGL) {
+
+    WithActiveGL(OpenGL, cv_state, -1) {
+        // Capture context for deferred deletion logic
+        self->owning_context = (PyCaravanContext *)Py_NewRef(_cv_ctx);
+
         OpenGL->GenTextures(1, &self->tex.id);
         self->tex.target = target;
 
-        // FIX: Use the state tracker to bind the texture safely so the cache knows about it
-        cv_bind_texture(state, 0, &self->tex, 0);
+        // Bind to unit 0 to initialize parameters.
+        // Note: cv_bind_texture now works on the TLS-provided cv_state.
+        cv_bind_texture(cv_state, OpenGL, 0, &self->tex, 0);
 
         OpenGL->TexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         OpenGL->TexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         OpenGL->TexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         OpenGL->TexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-        // We no longer unbind to 0 here. We just leave it bound to Unit 0.
-        // The state tracker knows it's there, so it's perfectly safe.
     }
     return 0;
 }
 
 PyCaravanGL_Slot Texture_dealloc(PyCaravanTexture *self) {
-    PyTypeObject *type = Py_TYPE(self);
-    PyObject *mod = PyType_GetModule(type);
-
-    WithCaravanGL(mod, OpenGL) {
-        if (self->tex.id != 0) {
-#pragma unroll 4
-            // FIX: Prevent Cache Poisoning.
-            // If this texture is currently cached in any unit, clear the cache.
-            for (int i = 0; i < CARAVAN_MAX_TEXTURE_UNITS; i++) {
-                if (state->ctx.bound.texture_units[i].id == self->tex.id) {
-                    state->ctx.bound.texture_units[i].id = 0;
-                    state->ctx.bound.texture_units[i].target = 0;
-                }
+    // Prevent cache poisoning: if this texture is in the active context's unit cache, clear it.
+    PyCaravanContext *active = cv_active_context;
+    if (active) {
+#pragma unroll 2
+        for (int i = 0; i < CARAVAN_MAX_TEXTURE_UNITS; i++) {
+            if (active->ctx.bound.texture_units[i].id == self->tex.id) {
+                active->ctx.bound.texture_units[i].id = 0;
             }
-
-            OpenGL->DeleteTextures(1, &self->tex.id);
-            self->tex.id = 0;
         }
     }
-    type->tp_free((PyObject *)self);
-    Py_DECREF(type);
+
+    // Use our thread-safe deferred deletion macro
+    CV_SAFE_DEALLOC(self, tex.id, texture_count, textures,
+                    OpenGL->DeleteTextures(1, &self->tex.id));
+
+    Py_XDECREF(self->owning_context);
+    Py_TYPE(self)->tp_free((PyObject *)self);
+}
+
+static int Texture_traverse(PyCaravanTexture *self, visitproc visit, void *arg) {
+    Py_VISIT(self->owning_context);
+    return 0;
+}
+
+static int Texture_clear(PyCaravanTexture *self) {
+    Py_CLEAR(self->owning_context);
+    return 0;
 }
 
 PyCaravanGL_API Texture_upload(PyCaravanTexture *self, PyObject *const *args, Py_ssize_t nargs,
                                PyObject *kwnames) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
     auto state = get_caravan_state(mod);
+
     int level = 0;
     int width = 0;
     int height = 0;
@@ -65,13 +76,13 @@ PyCaravanGL_API Texture_upload(PyCaravanTexture *self, PyObject *const *args, Py
     uint32_t type = 0;
     PyObject *py_data = nullptr;
 
-    void *targets[TexUpload_COUNT] = {[IDX_TEX_UPL_LEVEL] = (void *)(&level),
-                                      [IDX_TEX_UPL_W] = (void *)(&width),
-                                      [IDX_TEX_UPL_H] = (void *)(&height),
-                                      [IDX_TEX_UPL_D] = (void *)(&depth),
-                                      [IDX_TEX_UPL_IFMT] = (void *)(&internal_format),
-                                      [IDX_TEX_UPL_FMT] = (void *)(&format),
-                                      [IDX_TEX_UPL_TYPE] = (void *)(&type),
+    void *targets[TexUpload_COUNT] = {[IDX_TEX_UPL_LEVEL] = &level,
+                                      [IDX_TEX_UPL_W] = &width,
+                                      [IDX_TEX_UPL_H] = &height,
+                                      [IDX_TEX_UPL_D] = &depth,
+                                      [IDX_TEX_UPL_IFMT] = &internal_format,
+                                      [IDX_TEX_UPL_FMT] = &format,
+                                      [IDX_TEX_UPL_TYPE] = &type,
                                       [IDX_TEX_UPL_DATA] = (void *)&py_data};
 
     if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.TexUploadParser, targets)) {
@@ -81,31 +92,27 @@ PyCaravanGL_API Texture_upload(PyCaravanTexture *self, PyObject *const *args, Py
     const void *ptr = nullptr;
     Py_buffer view;
     if (py_data && py_data != Py_None) {
-        if (PyObject_GetBuffer(py_data, &view, PyBUF_SIMPLE) == 0) {
-            ptr = view.buf;
-        } else {
+        if (PyObject_GetBuffer(py_data, &view, PyBUF_SIMPLE) != 0) {
             PyErr_SetString(PyExc_TypeError, "Data must support the buffer protocol.");
             return nullptr;
         }
+        ptr = view.buf;
     }
 
-    // Save metadata
-    self->tex.width = width;
-    self->tex.height = height;
-    self->tex.depth = depth;
-    self->tex.internal_format = internal_format;
-    self->tex.format = format;
-    self->tex.type = type;
-    WithCaravanGL(mod, OpenGL) {
-        // Force bind texture to unit 0 for upload
-        cv_bind_texture(state, 0, &self->tex, 0);
+    // Textures are shared resources; any active context can perform the upload.
+    WithActiveGL(OpenGL, cv_state, nullptr) {
+        self->tex.width = width;
+        self->tex.height = height;
+        self->tex.depth = depth;
+        self->tex.internal_format = internal_format;
+        self->tex.format = format;
+        self->tex.type = type;
 
-        // Tell OpenGL to unpack memory with 1-byte alignment (standard for Python buffers)
+        cv_bind_texture(cv_state, OpenGL, 0, &self->tex, 0);
         OpenGL->PixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
         if (self->tex.target == GL_TEXTURE_2D ||
-            self->tex.target ==
-                GL_TEXTURE_CUBE_MAP_POSITIVE_X) { // Cube maps use 2D uploads per face
+            self->tex.target == GL_TEXTURE_CUBE_MAP_POSITIVE_X) {
             OpenGL->TexImage2D(self->tex.target, level, (GLint)internal_format, width, height, 0,
                                format, type, ptr);
         } else if (self->tex.target == GL_TEXTURE_3D || self->tex.target == GL_TEXTURE_2D_ARRAY) {
@@ -130,7 +137,6 @@ PyCaravanGL_API Texture_bind(PyCaravanTexture *self, PyObject *const *args, Py_s
 
     uint32_t unit = 0;
     PyObject *py_sampler = nullptr;
-
     void *targets[TexBind_COUNT] = {[IDX_TEX_BIND_UNIT] = &unit,
                                     [IDX_TEX_BIND_SAMP] = (void *)&py_sampler};
 
@@ -139,31 +145,24 @@ PyCaravanGL_API Texture_bind(PyCaravanTexture *self, PyObject *const *args, Py_s
     }
 
     GLuint sampler_id = 0;
-
-    if (py_sampler != nullptr && py_sampler != Py_None) {
-        // --- STRICT TYPE CHECK ---
-        // 1. Fast path: check if the type pointer matches exactly
+    if (py_sampler && py_sampler != Py_None) {
         if (!Py_IS_TYPE(py_sampler, state->SamplerType)) {
-            // 2. Slow path: check if it's a subclass (standard Python behavior)
-            if (!PyObject_TypeCheck(py_sampler, state->SamplerType)) {
-                PyErr_Format(PyExc_TypeError, "sampler must be a caravangl.Sampler, not %.200s",
-                             Py_TYPE(py_sampler)->tp_name);
-                return nullptr;
-            }
+            PyErr_Format(PyExc_TypeError, "sampler must be a caravangl.Sampler");
+            return nullptr;
         }
         sampler_id = ((PyCaravanSampler *)py_sampler)->id;
     }
 
-    WithCaravanGL(mod, OpenGL) {
-        cv_bind_texture(state, unit, &self->tex, sampler_id);
+    WithActiveGL(OpenGL, cv_state, nullptr) {
+        cv_bind_texture(cv_state, OpenGL, unit, &self->tex, sampler_id);
     }
     Py_RETURN_NONE;
 }
 
 PyCaravanGL_API Texture_generate_mipmap(PyCaravanTexture *self, [[maybe_unused]] PyObject *unused) {
-    PyObject *mod = PyType_GetModule(Py_TYPE(self));
-    WithCaravanGL(mod, OpenGL) {
-        cv_bind_texture(state, 0, &self->tex, 0);
+    WithActiveGL(OpenGL, cv_state, nullptr) {
+        // Bind to unit 0 for the operation
+        cv_bind_texture(cv_state, OpenGL, 0, &self->tex, 0);
         OpenGL->GenerateMipmap(self->tex.target);
     }
     Py_RETURN_NONE;
@@ -179,6 +178,8 @@ static const PyMethodDef Texture_methods[] = {
 
 static const PyType_Slot Texture_slots[] = {{Py_tp_init, Texture_init},
                                             {Py_tp_dealloc, Texture_dealloc},
+                                            {Py_tp_traverse, Texture_traverse},
+                                            {Py_tp_clear, Texture_clear},
                                             {Py_tp_methods, (PyMethodDef *)Texture_methods},
                                             {0, nullptr}};
 
@@ -186,6 +187,6 @@ static const PyType_Slot Texture_slots[] = {{Py_tp_init, Texture_init},
 const PyType_Spec Texture_spec = {
     .name = "caravangl.Texture",
     .basicsize = sizeof(PyCaravanTexture),
-    .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,
     .slots = (PyType_Slot *)Texture_slots,
 };

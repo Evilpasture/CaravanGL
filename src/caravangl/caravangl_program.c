@@ -1,3 +1,4 @@
+#include "caravangl_context.h"
 #include "pycaravangl.h"
 #include <ctype.h> // Required for isspace()
 
@@ -61,7 +62,8 @@ PyCaravanGL_Status Program_init(PyCaravanProgram *self, PyObject *args, PyObject
         return -1;
     }
 
-    WithCaravanGL(mod, OpenGL) {
+    WithActiveGL(OpenGL, cv_state, -1) {
+        self->owning_context = (PyCaravanContext *)Py_NewRef(_cv_ctx);
         GLuint vertex_shader = compile_shader(OpenGL, GL_VERTEX_SHADER, vs_src);
         if (!vertex_shader) {
             return -1;
@@ -96,15 +98,10 @@ PyCaravanGL_Status Program_init(PyCaravanProgram *self, PyObject *args, PyObject
 }
 
 PyCaravanGL_Slot Program_dealloc(PyCaravanProgram *self) {
-    PyTypeObject *type = Py_TYPE(self);
-    PyObject *mod = PyType_GetModule(type);
-    WithCaravanGL(mod, OpenGL) {
-        if (self->id) {
-            OpenGL->DeleteProgram(self->id);
-        }
-    }
-    type->tp_free((PyObject *)self);
-    Py_DECREF(type);
+    CV_SAFE_DEALLOC(self, id, program_count, programs, OpenGL->DeleteProgram(self->id));
+
+    Py_XDECREF(self->owning_context);
+    Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
 // Quick helper to fetch a uniform location from Python
@@ -113,12 +110,18 @@ PyCaravanGL_API Program_get_uniform_location(PyCaravanProgram *self, PyObject *a
         PyErr_SetString(PyExc_TypeError, "Uniform name must be a string");
         return nullptr;
     }
-    PyObject *mod = PyType_GetModule(Py_TYPE(self));
+
     const char *name = PyUnicode_AsUTF8(arg);
-    WithCaravanGL(mod, OpenGL) {
+
+    // We use WithActiveGL because GetUniformLocation requires an active GL context
+    // on the current thread to talk to the driver.
+    WithActiveGL(OpenGL, cv_state, nullptr) {
         GLint loc = OpenGL->GetUniformLocation(self->id, name);
         return PyLong_FromLong(loc);
     }
+
+    // The macro returns nullptr if no context is active,
+    // so this line is technically unreachable but required for compiler completeness.
     return nullptr;
 }
 

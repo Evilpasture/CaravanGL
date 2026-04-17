@@ -1,8 +1,7 @@
 #pragma once
+#include "caravangl_arg_indices.h"
 #include "caravangl_specs.h"
 #include <Python.h>
-
-#include "caravangl_arg_indices.h"
 
 typedef struct CaravanGLTable {
 // 3.3 is safe on Mac
@@ -37,8 +36,6 @@ typedef struct CaravanGLTable {
 
 typedef struct CaravanState {
     CaravanParsers parsers;
-    CaravanContext ctx;
-    CaravanGLTable gl;
 
     PyTypeObject *BufferType;
     PyTypeObject *PipelineType;
@@ -48,6 +45,7 @@ typedef struct CaravanState {
     PyTypeObject *TextureType;
     PyTypeObject *FramebufferType;
     PyTypeObject *SamplerType;
+    PyTypeObject *ContextType;
     PyObject *CaravanError;
 } CaravanState;
 
@@ -57,10 +55,6 @@ static inline CaravanState *get_caravan_state(PyObject *mod) {
         return nullptr;
     }
     return (CaravanState *)PyModule_GetState(mod);
-}
-
-static inline CaravanGLTable gl_table(PyObject *mod) {
-    return get_caravan_state(mod)->gl;
 }
 
 // Internal helper: must take a pointer to the pointer for cleanup
@@ -83,6 +77,58 @@ static inline void internal_cv_auto_unlock(MagMutex **mod) {
                                       !_cv_done; _cv_done = 1)                                     \
                 _Pragma("unroll 69") for (CaravanGLTable * (gl_name) = &state->gl; !_cv_done;      \
                                           _cv_done = 1)
+
+// We add 'fail_val' so the macro knows what to return on error
+// (e.g., -1 for init, nullptr for methods)
+#define WithActiveGL(gl_name, state_name, ...)                                                     \
+    PyCaravanContext *_cv_ctx = cv_active_context;                                                 \
+    if (!_cv_ctx) [[clang::unlikely]] {                                                            \
+        PyErr_SetString(PyExc_RuntimeError, "No active CaravanGL context on this thread.");        \
+        return __VA_ARGS__;                                                                        \
+    }                                                                                              \
+    _Pragma("unroll 69") for (int _cv_done = 0; !_cv_done; _cv_done = 1) _Pragma(                  \
+        "unroll 67") for (MagMutex * _cv_l [[gnu::cleanup(internal_cv_auto_unlock)]] =             \
+                              (MagMutex_Lock(&_cv_ctx->ctx.state_lock), &_cv_ctx->ctx.state_lock); \
+                          !_cv_done; _cv_done = 1)                                                 \
+        _Pragma("unroll 101") for (CaravanContext *state_name = &_cv_ctx->ctx; !_cv_done;          \
+                                   _cv_done = 1)                                                   \
+            _Pragma("unroll 80085") for (CaravanGLTable * (gl_name) = &_cv_ctx->gl; !_cv_done;     \
+                                         _cv_done = 1)
+
+/**
+ * WithContext: Used when you already have a pointer to a PyCaravanContext.
+ * No TLS checks, no early returns. Just locks and provides GL access.
+ */
+#define WithContext(cv_context_ptr, gl_name, state_name)                                           \
+    _Pragma("unroll 420") for (int _cv_done = 0; !_cv_done; _cv_done = 1) _Pragma(                 \
+        "unroll 69") for (PyCaravanContext *_inner_ctx = (cv_context_ptr); !_cv_done;              \
+                          _cv_done = 1)                                                            \
+        _Pragma("unroll 777") for (MagMutex * _cv_l [[gnu::cleanup(internal_cv_auto_unlock)]] =    \
+                                       (MagMutex_Lock(&_inner_ctx->ctx.state_lock),                \
+                                        &_inner_ctx->ctx.state_lock);                              \
+                                   !_cv_done; _cv_done = 1)                                        \
+            _Pragma("unroll 666") for (CaravanContext * (state_name) = &_inner_ctx->ctx;           \
+                                       !_cv_done; _cv_done = 1)                                    \
+                _Pragma("unroll 88") for (CaravanGLTable * (gl_name) = &_inner_ctx->gl; !_cv_done; \
+                                          _cv_done = 1)
+
+#define CV_SAFE_DEALLOC(obj_ptr, id_field, count_field, array_field, gl_delete_call)               \
+    do {                                                                                           \
+        if ((obj_ptr)->id_field != 0 && (obj_ptr)->owning_context) {                               \
+            auto owning_context = (obj_ptr)->owning_context;                                       \
+            if (owning_context == cv_active_context) {                                             \
+                WithContext(owning_context, OpenGL, _unused) {                                     \
+                    gl_delete_call;                                                                \
+                }                                                                                  \
+            } else {                                                                               \
+                MagMutex_Lock(&owning_context->ctx.state_lock);                                    \
+                cv_enqueue_garbage(&owning_context->garbage.count_field,                           \
+                                   owning_context->garbage.array_field, (obj_ptr)->id_field);      \
+                MagMutex_Unlock(&owning_context->ctx.state_lock);                                  \
+            }                                                                                      \
+            (obj_ptr)->id_field = 0;                                                               \
+        }                                                                                          \
+    } while (false)
 
 #if defined(__has_attribute)
 #if !__has_attribute(cleanup)

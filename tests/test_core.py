@@ -65,7 +65,7 @@ def gl_context():
         pytest.skip("Failed to create GLFW context.")
 
     glfw.make_context_current(window)
-    caravangl.init(loader=GLLoader())
+    caravangl.Context(loader=GLLoader())
     yield window
     glfw.destroy_window(window)
     glfw.terminate()

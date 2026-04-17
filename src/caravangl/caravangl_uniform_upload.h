@@ -23,26 +23,20 @@ typedef struct {
  * Executes a batch of uniform uploads using the function pointer table.
  */
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_upload_uniform_batch(CaravanState *state, CaravanUniformSource src) {
+static inline void cv_upload_uniform_batch(CaravanGLTable *gl, CaravanUniformSource src) {
     const CaravanUniformHeader *header = src.header;
     const char *data = (const char *)src.payload;
 #pragma unroll 4
     for (uint32_t i = 0; i < header->count; ++i) {
         const CaravanUniformBinding *binding = &header->bindings[i];
+        if (binding->location == -1) {
+            continue;
+        }
         const void *ptr = data + binding->offset;
 
-        if (binding->function_id < UF_COUNT) [[clang::likely]] {
-            UniformUploadFn func = uniform_upload_table[binding->function_id];
-            if (func != nullptr) [[clang::likely]] {
-                func(state, binding->location, binding->count, ptr);
-            }
-        } else {
-#ifndef NDEBUG
-            if (fprintf(stderr, "[CaravanGL] Invalid uniform function ID: %d\n",
-                        binding->function_id) < 0) {
-                // the world has ended
-            }
-#endif
+        UniformUploadFn func = uniform_upload_table[binding->function_id];
+        if (func) {
+            func(gl, binding->location, binding->count, ptr);
         }
     }
 }

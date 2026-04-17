@@ -222,3 +222,30 @@ typedef struct CaravanDrawParams {
     GLuint first_vertex;
     GLuint base_instance;
 } CaravanDrawParams;
+
+static constexpr size_t CARAVAN_GARBAGE_SIZE = 256;
+
+typedef struct CaravanGarbage {
+    // Objects deleted via glDelete*(count, ids)
+    GLuint buffers[CARAVAN_GARBAGE_SIZE];
+    size_t buffer_count;
+
+    GLuint textures[CARAVAN_GARBAGE_SIZE];
+    size_t texture_count;
+
+    GLuint vaos[CARAVAN_GARBAGE_SIZE];
+    size_t vao_count;
+
+    GLuint fbos[CARAVAN_GARBAGE_SIZE];
+    size_t fbo_count;
+
+    GLuint rbos[CARAVAN_GARBAGE_SIZE];
+    size_t rbo_count;
+
+    GLuint samplers[CARAVAN_GARBAGE_SIZE];
+    size_t sampler_count;
+
+    // Objects deleted via glDelete*(id)
+    GLuint programs[CARAVAN_GARBAGE_SIZE];
+    size_t program_count;
+} CaravanGarbage;

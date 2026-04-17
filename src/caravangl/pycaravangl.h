@@ -67,19 +67,34 @@ static inline int caravan_dispatch_members(PyObject **members[], size_t count,
     return 0;
 }
 
+typedef struct PyCaravanContext {
+    PyObject_HEAD
+
+        CaravanGLTable gl;  // Function pointers per-context
+    CaravanContext ctx;     // The Shadow State & Mutex
+    CaravanGarbage garbage; // Deferred deletion queue
+
+    // Optional callback to trigger the OS-level glfwMakeContextCurrent
+    PyObject *os_make_current_cb;
+} PyCaravanContext;
+
 typedef struct {
-    PyObject_HEAD CaravanBuffer buf;
-    PyObject *weakreflist; // Support for weak references
+    PyObject_HEAD PyCaravanContext *owning_context; // NEW!
+    CaravanBuffer buf;
+    PyObject *weakreflist;
 } PyCaravanBuffer;
 
 typedef struct {
-    PyObject_HEAD CaravanTexture tex;
+    PyObject_HEAD PyCaravanContext *owning_context;
+    CaravanTexture tex;
 } PyCaravanTexture;
 
 typedef struct PyCaravanPipeline {
     PyObject_HEAD
 
-        PyObject *program_ref;
+        PyCaravanContext *owning_context;
+
+    PyObject *program_ref;
     PyObject *vao_ref;
 
     // Core GPU Objects
@@ -101,11 +116,13 @@ typedef struct PyCaravanPipeline {
 } PyCaravanPipeline;
 
 typedef struct {
-    PyObject_HEAD GLuint id;
+    PyObject_HEAD PyCaravanContext *owning_context;
+    GLuint id;
 } PyCaravanProgram;
 
 typedef struct {
-    PyObject_HEAD GLuint id;
+    PyObject_HEAD PyCaravanContext *owning_context;
+    GLuint id;
 } PyCaravanVertexArray;
 
 typedef struct {
@@ -118,9 +135,11 @@ typedef struct {
 } PyCaravanUniformBatch;
 
 typedef struct {
-    PyObject_HEAD CaravanFramebuffer fbo;
+    PyObject_HEAD PyCaravanContext *owning_context;
+    CaravanFramebuffer fbo;
 } PyCaravanFramebuffer;
 
 typedef struct {
-    PyObject_HEAD GLuint id;
+    PyObject_HEAD PyCaravanContext *owning_context;
+    GLuint id;
 } PyCaravanSampler;

@@ -7,10 +7,10 @@
  * ============================================================================
  */
 
+#include "caravangl_context.h"
 #include "caravangl_state.h"
 #define PY_SSIZE_T_CLEAN
 #include "caravangl_arg_indices.h"
-#include "caravangl_loader.h"
 #include "caravangl_pyspec.h"
 #include "fast_build.h"
 #include "pycaravangl.h"
@@ -18,121 +18,39 @@
 #include <string.h>
 
 // -----------------------------------------------------------------------------
-// Internal Helpers
-// -----------------------------------------------------------------------------
-
-/**
- * Queries GPU hardware limits and populates the state context.
- * Called once during caravan.init() (already inside the lock).
- */
-static void query_capabilities(CaravanState *state) {
-    CaravanGLTable *OpenGL = &state->gl;
-
-    if (OpenGL->GetIntegerv != nullptr) {
-        // Textures
-        OpenGL->GetIntegerv(GL_MAX_TEXTURE_SIZE, &state->ctx.caps.max_texture_size);
-        OpenGL->GetIntegerv(GL_MAX_3D_TEXTURE_SIZE, &state->ctx.caps.max_3d_texture_size);
-        OpenGL->GetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &state->ctx.caps.max_array_texture_layers);
-        OpenGL->GetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS,
-                            &state->ctx.caps.max_texture_units);
-
-        // FBOs & Buffers
-        OpenGL->GetIntegerv(GL_MAX_SAMPLES, &state->ctx.caps.max_samples);
-        OpenGL->GetIntegerv(GL_MAX_COLOR_ATTACHMENTS, &state->ctx.caps.max_color_attachments);
-        OpenGL->GetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &state->ctx.caps.max_uniform_block_size);
-        OpenGL->GetIntegerv(GL_MAX_UNIFORM_BUFFER_BINDINGS, &state->ctx.caps.max_ubo_bindings);
-
-        // Viewport
-        GLint viewport[4] = {};
-        OpenGL->GetIntegerv(GL_VIEWPORT, viewport);
-        state->ctx.viewport = (CaravanRect){
-            .x = viewport[0], .y = viewport[1], .width = viewport[2], .height = viewport[3]};
-    }
-
-#ifndef __APPLE__
-    state->ctx.caps.support_compute = (OpenGL->DispatchCompute != nullptr);
-    state->ctx.caps.support_bindless = (OpenGL->GetTextureHandleARB != nullptr);
-
-    if (state->ctx.caps.support_compute && OpenGL->GetIntegerv != nullptr) {
-        OpenGL->GetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS,
-                            &state->ctx.caps.max_compute_work_group_invocations);
-        OpenGL->GetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE,
-                            &state->ctx.caps.max_shader_storage_block_size);
-    }
-#else
-    // Hardcode to false for Mac (OpenGL 4.1 limit)
-    state->ctx.caps.support_compute = false;
-    state->ctx.caps.support_bindless = false;
-    state->ctx.caps.max_compute_work_group_invocations = 0;
-    state->ctx.caps.max_shader_storage_block_size = 0;
-#endif
-}
-
-// -----------------------------------------------------------------------------
 // Module-Level API
 // -----------------------------------------------------------------------------
 
 /**
- * caravan.init(loader)
- * Loads the function table and discovers GPU capabilities.
- */
-PyCaravanGL_API caravan_meth_init(PyObject *mod, PyObject *const *args, Py_ssize_t nargsf,
-                                  PyObject *kwnames) {
-    // 1. Get state (Lock-free, module state is stable)
-    auto state = get_caravan_state(mod);
-    if (!state) {
-        return nullptr;
-    }
-
-    // 2. Extract targets (Python work - Outside the lock)
-    PyObject *loader = nullptr;
-    void *targets[Init_COUNT] = {[IDX_INIT_LOADER] = (void *)&loader};
-
-    if (!FastParse_Unified(args, PyVectorcall_NARGS(nargsf), kwnames, &state->parsers.InitParser,
-                           targets)) {
-        return nullptr;
-    }
-
-    // 3. Perform GPU Work (Inside the lock)
-    WithCaravanGL(mod, gl) {
-        if (load_gl(state, loader) < 0) {
-            return nullptr;
-        }
-        query_capabilities(state);
-    }
-
-    Py_RETURN_NONE;
-}
-
-/**
  * caravangl.context() -> dict
- * Returns a snapshot of capabilities and driver info using FastBuild.
+ * Returns a snapshot of capabilities and driver info for the active context.
  */
-static inline PyObject *build_context_dict(CaravanState *state, CaravanGLTable *OpenGL) {
-    // 0 nesting here!
-    PyObject *caps = FastBuild_Dict("max_texture_size", state->ctx.caps.max_texture_size,
-                                    "max_samples", state->ctx.caps.max_samples, "support_compute",
-                                    state->ctx.caps.support_compute, "support_bindless",
-                                    state->ctx.caps.support_bindless);
+static inline PyObject *build_context_dict(CaravanContext *ctx, CaravanGLTable *OpenGL) {
+    PyObject *caps =
+        FastBuild_Dict("max_texture_size", ctx->caps.max_texture_size, "max_samples",
+                       ctx->caps.max_samples, "support_compute", ctx->caps.support_compute,
+                       "support_bindless", ctx->caps.support_bindless);
 
     PyObject *info = FastBuild_Dict("vendor", (const char *)OpenGL->GetString(GL_VENDOR),
                                     "renderer", (const char *)OpenGL->GetString(GL_RENDERER),
                                     "version", (const char *)OpenGL->GetString(GL_VERSION));
 
     return FastBuild_Dict("caps", caps, "info", info, "viewport",
-                          FastBuild_Tuple(state->ctx.viewport.x, state->ctx.viewport.y,
-                                          state->ctx.viewport.width, state->ctx.viewport.height));
+                          FastBuild_Tuple(ctx->viewport.x, ctx->viewport.y, ctx->viewport.width,
+                                          ctx->viewport.height));
 }
+
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-PyCaravanGL_API caravan_meth_context(PyObject *mod, [[maybe_unused]] PyObject *args) {
-    WithCaravanGL(mod, OpenGL) {
+PyCaravanGL_API caravan_meth_context([[maybe_unused]] PyObject *mod,
+                                     [[maybe_unused]] PyObject *args) {
+    // We use WithActiveGL to grab the TLS-bound context automatically
+    WithActiveGL(OpenGL, cv_state, nullptr) {
         if (OpenGL->GetString == nullptr) {
-            PyErr_SetString(PyExc_RuntimeError, "OpenGL not loaded. Call init() first.");
+            PyErr_SetString(PyExc_RuntimeError, "OpenGL loader not initialized.");
             return nullptr;
         }
 
-        // Complexity: 1 (the call) + depth penalty of the macro
-        return build_context_dict(state, OpenGL);
+        return build_context_dict(cv_state, OpenGL);
     }
     return nullptr;
 }
@@ -245,7 +163,7 @@ PyCaravanGL_API caravan_meth_clear(PyObject *mod, PyObject *const *args, Py_ssiz
     if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.ClearParser, targets)) {
         return nullptr;
     }
-    WithCaravanGL(mod, OpenGL) {
+    WithActiveGL(OpenGL, cv_state, nullptr) {
         OpenGL->Clear(mask);
     }
     Py_RETURN_NONE;
@@ -253,7 +171,9 @@ PyCaravanGL_API caravan_meth_clear(PyObject *mod, PyObject *const *args, Py_ssiz
 
 PyCaravanGL_API caravan_meth_clear_color(PyObject *mod, PyObject *const *args, Py_ssize_t nargs,
                                          PyObject *kwnames) {
+    // We still need the module state to access the static, read-only Parsers
     auto state = get_caravan_state(mod);
+
     float red = 0.0F;
     float green = 0.0F;
     float blue = 0.0F;
@@ -266,37 +186,45 @@ PyCaravanGL_API caravan_meth_clear_color(PyObject *mod, PyObject *const *args, P
     if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.ClearColorParser, targets)) {
         return nullptr;
     }
-    const GLfloat color[] = {red, green, blue, alpha};
-    WithCaravanGL(mod, OpenGL) {
+
+    // Use Active Context to perform the GL call
+    WithActiveGL(OpenGL, cv_state, nullptr) {
+        const GLfloat color[] = {red, green, blue, alpha};
         OpenGL->ClearBufferfv(GL_COLOR, 0, color);
     }
     Py_RETURN_NONE;
 }
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-PyCaravanGL_API caravan_bind_default_framebuffer(PyObject *mod, [[maybe_unused]] PyObject *args) {
-    WithCaravanGL(mod, OpenGL) {
-        cv_bind_fbo_combined(state, 0); // 0 is always the screen
+PyCaravanGL_API caravan_bind_default_framebuffer([[maybe_unused]] PyObject *mod,
+                                                 [[maybe_unused]] PyObject *args) {
+    // No parsing needed here, just context switching
+    WithActiveGL(OpenGL, cv_state, nullptr) {
+        // The helpers in state.h must now accept (ctx, gl, id)
+        cv_bind_fbo_combined(cv_state, OpenGL, 0);
     }
     Py_RETURN_NONE;
 }
 
 PyCaravanGL_API caravan_viewport(PyObject *mod, PyObject *const *args, Py_ssize_t nargs,
                                  PyObject *kwnames) {
-    CaravanState *state = get_caravan_state(mod);
-    int left_offset = 0;
-    int bottom_offset = 0;
+    // Keep module state for parsers (parsers are global/immutable)
+    auto state = get_caravan_state(mod);
+
+    int x = 0;
+    int y = 0;
     int width = 0;
     int height = 0;
-    void *targets[Viewport_COUNT] = {&left_offset, &bottom_offset, &width, &height};
+    void *targets[Viewport_COUNT] = {&x, &y, &width, &height};
+
     if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.ViewportParser, targets)) {
         return nullptr;
     }
 
-    WithCaravanGL(mod, OpenGL) {
-        cv_bind_viewport(
-            state,
-            &(CaravanRect){.x = left_offset, .y = bottom_offset, .width = width, .height = height});
+    // WithActiveGL automatically extracts the correct context for this thread
+    WithActiveGL(OpenGL, cv_state, nullptr) {
+        cv_bind_viewport(cv_state, OpenGL,
+                         &(CaravanRect){.x = x, .y = y, .width = width, .height = height});
     }
     Py_RETURN_NONE;
 }
@@ -345,8 +273,6 @@ PyCaravanGL_API caravan_meth_enable_debug([[maybe_unused]] PyObject *mod,
 }
 
 static const PyMethodDef caravan_methods[] = {
-    {"init", (PyCFunction)(void (*)(void))caravan_meth_init, METH_FASTCALL | METH_KEYWORDS,
-     "Initialize loader"},
     {"enable_debug", (PyCFunction)caravan_meth_enable_debug, METH_NOARGS, "Enable GL Debug Output"},
     {"context", (PyCFunction)(void (*)(void))caravan_meth_context, METH_NOARGS, "Get capabilities"},
     {"inspect", (PyCFunction)caravan_meth_inspect, METH_O, "Inspect internal C/GL state"},
@@ -385,6 +311,7 @@ static int init_types(PyObject *mod, CaravanState *state) {
         {&Texture_spec, (PyObject **)&state->TextureType, "Texture"},
         {&Framebuffer_spec, (PyObject **)&state->FramebufferType, "Framebuffer"},
         {&Sampler_spec, (PyObject **)&state->SamplerType, "Sampler"},
+        {&Context_spec, (PyObject **)&state->ContextType, "Context"},
     };
 
     auto mod_name = PyUnicode_FromString("caravangl");
@@ -577,6 +504,7 @@ PyCaravanGL_Status caravan_traverse(PyObject *module, visitproc visit, void *arg
         (PyObject **)&state->BufferType,       (PyObject **)&state->PipelineType,
         (PyObject **)&state->ProgramType,      (PyObject **)&state->VertexArrayType,
         (PyObject **)&state->UniformBatchType, (PyObject **)&state->TextureType,
+        (PyObject **)&state->ContextType,
     };
 
     TraverseContext context = {.visit = visit, .arg = arg};
@@ -599,6 +527,7 @@ PyCaravanGL_Status caravan_clear(PyObject *module) {
         (PyObject **)&state->BufferType,       (PyObject **)&state->PipelineType,
         (PyObject **)&state->ProgramType,      (PyObject **)&state->VertexArrayType,
         (PyObject **)&state->UniformBatchType, (PyObject **)&state->TextureType,
+        (PyObject **)&state->ContextType,
     };
 
     return caravan_dispatch_members(members, sizeof(members) / sizeof(members[0]), op_clear_member,

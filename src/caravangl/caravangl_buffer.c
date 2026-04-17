@@ -1,53 +1,45 @@
+#include "caravangl_context.h"
 #include "pycaravangl.h"
 
-// -----------------------------------------------------------------------------
-// Buffer Object Implementation (Heap Type)
-// -----------------------------------------------------------------------------
-
 /**
- * Buffer Deallocator: Cleans up GPU resources before the Python object is freed.
+ * Buffer Deallocator: Cleans up GPU resources using the deferred garbage queue.
  */
 PyCaravanGL_Slot Buffer_dealloc(PyCaravanBuffer *self) {
-    PyTypeObject *type = Py_TYPE(self);
-    PyObject *mod = PyType_GetModule(type);
+    CV_SAFE_DEALLOC(self, buf.id, buffer_count, buffers, OpenGL->DeleteBuffers(1, &self->buf.id));
 
-    WithCaravanGL(mod, OpenGL) {
-        if (self->buf.id != 0) {
-            OpenGL->DeleteBuffers(1, &self->buf.id);
-            self->buf.id = 0;
-        }
-    }
-
-    if (self->weakreflist != nullptr) {
-        PyObject_ClearWeakRefs((PyObject *)self);
-    }
-
-    type->tp_free((PyObject *)self);
-    Py_DECREF(type);
+    Py_XDECREF(self->owning_context);
+    Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
-/**
- * Buffer Init: Handles creation and initial data upload.
- * Signature: (self, args, kwds) -> Standard tp_init
- */
+static int Buffer_traverse(PyCaravanBuffer *self, visitproc visit, void *arg) {
+    Py_VISIT(self->owning_context);
+    return 0;
+}
+
+static int Buffer_clear(PyCaravanBuffer *self) {
+    Py_CLEAR(self->owning_context);
+    return 0;
+}
+
 PyCaravanGL_Status Buffer_init(PyCaravanBuffer *self, PyObject *args, PyObject *kwds) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
+    auto state = get_caravan_state(mod);
+    int size = 0;
+    PyObject *data = nullptr;
+    uint32_t target = GL_ARRAY_BUFFER;
+    uint32_t usage = GL_STATIC_DRAW;
 
-    WithCaravanGL(mod, OpenGL) {
-        int size = 0;
-        PyObject *data = nullptr;
-        uint32_t target = GL_ARRAY_BUFFER;
-        uint32_t usage = GL_STATIC_DRAW;
+    void *targets[BufInit_COUNT] = {[IDX_BUF_SIZE] = &size,
+                                    [IDX_BUF_DATA] = (void *)&data,
+                                    [IDX_BUF_TARGET] = &target,
+                                    [IDX_BUF_USAGE] = &usage};
 
-        void *targets[BufInit_COUNT] = {[IDX_BUF_SIZE] = &size,
-                                        [IDX_BUF_DATA] = (void *)&data,
-                                        [IDX_BUF_TARGET] = &target,
-                                        [IDX_BUF_USAGE] = &usage};
+    if (!FastParse_Unified(args, kwds, nullptr, &state->parsers.BufInitParser, targets)) {
+        return -1;
+    }
 
-        // tp_init call: (args, kwds, kwnames=nullptr, parser, targets)
-        if (!FastParse_Unified(args, kwds, nullptr, &state->parsers.BufInitParser, targets)) {
-            return -1;
-        }
+    WithActiveGL(OpenGL, cv_state, -1) {
+        self->owning_context = (PyCaravanContext *)Py_NewRef(_cv_ctx);
 
         OpenGL->GenBuffers(1, &self->buf.id);
         OpenGL->BindBuffer(target, self->buf.id);
@@ -58,7 +50,7 @@ PyCaravanGL_Status Buffer_init(PyCaravanBuffer *self, PyObject *args, PyObject *
             if (PyObject_GetBuffer(data, &view, PyBUF_SIMPLE) == 0) {
                 ptr = view.buf;
             } else {
-                return -1; // Fail initialization if buffer extraction fails
+                return -1;
             }
         }
 
@@ -74,10 +66,6 @@ PyCaravanGL_Status Buffer_init(PyCaravanBuffer *self, PyObject *args, PyObject *
     return 0;
 }
 
-/**
- * Buffer Write: Updates a region of the buffer.
- * Signature: (self, args, nargs, kwnames) -> FastCall
- */
 PyCaravanGL_API Buffer_write(PyCaravanBuffer *self, PyObject *const *args, Py_ssize_t nargs,
                              PyObject *kwnames) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
@@ -104,7 +92,8 @@ PyCaravanGL_API Buffer_write(PyCaravanBuffer *self, PyObject *const *args, Py_ss
         return nullptr;
     }
 
-    WithCaravanGL(mod, OpenGL) {
+    // UPDATED: Use WithActiveGL
+    WithActiveGL(OpenGL, cv_state, nullptr) {
         OpenGL->BindBuffer(self->buf.target, self->buf.id);
         OpenGL->BufferSubData(self->buf.target, (GLintptr)offset, (GLsizeiptr)view.len, view.buf);
         PyBuffer_Release(&view);
@@ -112,10 +101,6 @@ PyCaravanGL_API Buffer_write(PyCaravanBuffer *self, PyObject *const *args, Py_ss
     Py_RETURN_NONE;
 }
 
-/**
- * Buffer Bind Base: Binds buffer to an indexed target (UBO/SSBO).
- * Signature: (self, args, nargs, kwnames) -> FastCall
- */
 PyCaravanGL_API Buffer_bind_base(PyCaravanBuffer *self, PyObject *const *args, Py_ssize_t nargs,
                                  PyObject *kwnames) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
@@ -128,8 +113,8 @@ PyCaravanGL_API Buffer_bind_base(PyCaravanBuffer *self, PyObject *const *args, P
         return nullptr;
     }
 
-    WithCaravanGL(mod, OpenGL) {
-
+    // UPDATED: Use WithActiveGL
+    WithActiveGL(OpenGL, cv_state, nullptr) {
         OpenGL->BindBufferBase(self->buf.target, index, self->buf.id);
     }
     Py_RETURN_NONE;
@@ -140,19 +125,21 @@ static const PyMethodDef Buffer_methods[] = {
      "Write data to buffer."},
     {"bind_base", (PyCFunction)(void (*)(void))Buffer_bind_base, METH_FASTCALL | METH_KEYWORDS,
      "Bind as indexed resource."},
-    {}};
+    {nullptr}};
 
 static const PyType_Slot Buffer_slots[] = {{Py_tp_init, Buffer_init},
                                            {Py_tp_dealloc, Buffer_dealloc},
+                                           {Py_tp_traverse, Buffer_traverse},
+                                           {Py_tp_clear, Buffer_clear},
                                            {Py_tp_methods, (PyMethodDef *)Buffer_methods},
                                            {Py_tp_doc, "CaravanGL Buffer Object (VBO, IBO, UBO)"},
-                                           {}};
+                                           {0, nullptr}};
 
 // NOLINTNEXTLINE(misc-use-internal-linkage)
 const PyType_Spec Buffer_spec = {
     .name = "caravangl.Buffer",
     .basicsize = sizeof(PyCaravanBuffer),
     .itemsize = 0,
-    .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,
     .slots = (PyType_Slot *)Buffer_slots,
 };

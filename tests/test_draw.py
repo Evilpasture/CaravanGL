@@ -49,7 +49,7 @@ out vec2 vTex;
 void main() {
     gl_Position = u_mvp * vec4(aPos, 1.0);
     vTex = aTex;
-}""".strip()
+}"""
 
 FS_3D = """#version 330 core
 uniform sampler2D u_tex;
@@ -57,7 +57,7 @@ in vec2 vTex;
 out vec4 fCol;
 void main() {
     fCol = texture(u_tex, vTex);
-}""".strip()
+}"""
 
 prog = caravangl.Program(vertex_shader=VS_3D, fragment_shader=FS_3D)
 
