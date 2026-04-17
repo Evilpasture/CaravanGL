@@ -248,4 +248,7 @@ typedef struct CaravanGarbage {
     // Objects deleted via glDelete*(id)
     GLuint programs[CARAVAN_GARBAGE_SIZE];
     size_t program_count;
+
+    GLsync syncs[CARAVAN_GARBAGE_SIZE];
+    size_t sync_count;
 } CaravanGarbage;

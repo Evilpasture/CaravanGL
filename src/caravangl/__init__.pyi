@@ -96,6 +96,12 @@ CCW: int
 FREE_THREADED: int
 DEBUG_BUILD: int
 
+TIMEOUT_IGNORED: int
+ALREADY_SIGNALED: int
+TIMEOUT_EXPIRED: int
+CONDITION_SATISFIED: int
+WAIT_FAILED: int
+
 # --- Module Level Functions ---
 
 def enable_debug() -> None: ...
@@ -187,8 +193,12 @@ class Framebuffer:
     def check_status(self) -> bool: ...
     def bind(self) -> None: ...
 
+class Sync:
+    def __init__(self) -> None: ...
+    def wait(self, timeout_sec: float | None = None) -> int: ...
+
 __all__ = [
-    "Context", "Buffer", "Sampler", "Texture", "Program", "VertexArray", "UniformBatch", "Pipeline", "Framebuffer",
+    "Context", "Buffer", "Sampler", "Texture", "Program", "VertexArray", "UniformBatch", "Pipeline", "Framebuffer", "Sync",
     "enable_debug", "context", "inspect", "clear", "clear_color", "viewport", 
     "bind_default_framebuffer", "get_active_context",
     "FLOAT", "UNSIGNED_BYTE", "UNSIGNED_SHORT", "UNSIGNED_INT", "UNSIGNED_INT_24_8",
@@ -204,6 +214,6 @@ __all__ = [
     "FRONT", "BACK", "FRONT_AND_BACK",
     "SRC_ALPHA", "ONE_MINUS_SRC_ALPHA", "ONE", "FUNC_ADD",
     "NEAREST", "LINEAR", "REPEAT", "CLAMP_TO_EDGE",
-    "CW", "CCW",
+    "CW", "CCW", "TIMEOUT_IGNORED", "ALREADY_SIGNALED", "TIMEOUT_EXPIRED", "CONDITION_SATISFIED", "WAIT_FAILED",
     "FREE_THREADED", "DEBUG_BUILD"
 ]

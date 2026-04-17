@@ -246,37 +246,32 @@ PyCaravanGL_API caravan_get_active_context([[maybe_unused]] PyObject *mod,
 PyCaravanGL_API caravan_meth_enable_debug([[maybe_unused]] PyObject *mod,
                                           [[maybe_unused]] PyObject *args) {
 #if !defined(__APPLE__)
-    WithCaravanGL(mod, gl) {
+    // We fetch the module state to pass as the userParam to the callback.
+    // This allows the callback to access module-level resources without globals.
+    CaravanState *state = get_caravan_state(mod);
+
+    WithActiveGL(OpenGL, cv_state, nullptr) {
         if (!OpenGL->DebugMessageCallback) {
             PyErr_SetString(PyExc_RuntimeError, "Debug Output not supported on this driver.");
             return nullptr;
         }
 
-        // 1. Enable debug mode in the driver
+        // 1. Enable debug mode for the ACTIVE context on this thread
         OpenGL->Enable(GL_DEBUG_OUTPUT);
 
-        // 2. Force synchronous calls. This blocks the CPU until the callback
-        // finishes. It makes performance worse, but gives you highly accurate error
-        // call-stacks.
+        // 2. Force synchronous calls for accurate Python-side call stacks
         OpenGL->Enable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
 
         // 3. Register the callback and pass 'state' as the userParam
         OpenGL->DebugMessageCallback(opengl_debug_callback, state);
 
-        // 4. Control what messages you want to hear:
-
-        // Enable everything by default
+        // 4. Set default filters
+        // Enable everything...
         OpenGL->DebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
 
-        // Example: Disable "Notification" level spam (like buffer memory placement
-        // info)
+        // ...except for "Notification" level spam (driver-specific info)
         OpenGL->DebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0,
                                     nullptr, GL_FALSE);
-
-        // Example: If you wanted to disable specific driver error IDs manually:
-        // GLuint skip_ids[] = { 1234, 5678 };
-        // OpenGL->DebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 2,
-        // skip_ids, GL_FALSE);
     }
     Py_RETURN_NONE;
 #else
@@ -310,6 +305,7 @@ static int init_types(PyObject *mod, CaravanState *state) {
         {&Framebuffer_spec, (PyObject **)&state->FramebufferType, "Framebuffer"},
         {&Sampler_spec, (PyObject **)&state->SamplerType, "Sampler"},
         {&Context_spec, (PyObject **)&state->ContextType, "Context"},
+        {&Sync_spec, (PyObject **)&state->SyncType, "Sync"},
     };
 
     auto mod_name = PyUnicode_FromString("caravangl");
@@ -343,12 +339,26 @@ static int init_types(PyObject *mod, CaravanState *state) {
     return 0;
 }
 
+static int CaravanModule_AddUnsignedLongLongConstant(PyObject *mod, const char *name,
+                                                     unsigned long long value) {
+    PyObject *obj = PyLong_FromUnsignedLongLong(value);
+    if (!obj) {
+        return -1;
+    }
+    if (PyModule_AddObjectRef(mod, name, obj) < 0) {
+        Py_DECREF(obj);
+        return -1;
+    }
+    Py_DECREF(obj);
+    return 0;
+}
+
 static int init_constants(PyObject *mod) {
     constexpr auto smol_alignment = 16;
     static const struct {
         [[gnu::aligned(smol_alignment)]]
         const char *name;
-        long value;
+        unsigned long long value;
     } consts[] = {{"FLOAT", GL_FLOAT},
                   {"TRIANGLES", GL_TRIANGLES},
                   {"LINES", GL_LINES},
@@ -440,6 +450,12 @@ static int init_constants(PyObject *mod) {
                   {"CW", GL_CW},
                   {"CCW", GL_CCW},
 
+                  {"TIMEOUT_IGNORED", GL_TIMEOUT_IGNORED},
+                  {"ALREADY_SIGNALED", GL_ALREADY_SIGNALED},
+                  {"TIMEOUT_EXPIRED", GL_TIMEOUT_EXPIRED},
+                  {"CONDITION_SATISFIED", GL_CONDITION_SATISFIED},
+                  {"WAIT_FAILED", GL_WAIT_FAILED},
+
                   // --- Build Metadata ---
                   {"FREE_THREADED",
 #if defined(Py_GIL_DISABLED) && Py_GIL_DISABLED
@@ -455,9 +471,9 @@ static int init_constants(PyObject *mod) {
                    0
 #endif
                   }};
-#pragma unroll 2
+#pragma unroll
     for (size_t i = 0; i < sizeof(consts) / sizeof(consts[0]); i++) {
-        if (PyModule_AddIntConstant(mod, consts[i].name, consts[i].value) < 0) {
+        if (CaravanModule_AddUnsignedLongLongConstant(mod, consts[i].name, consts[i].value) < 0) {
             return -1;
         }
     }
@@ -502,7 +518,7 @@ PyCaravanGL_Status caravan_traverse(PyObject *module, visitproc visit, void *arg
         (PyObject **)&state->BufferType,       (PyObject **)&state->PipelineType,
         (PyObject **)&state->ProgramType,      (PyObject **)&state->VertexArrayType,
         (PyObject **)&state->UniformBatchType, (PyObject **)&state->TextureType,
-        (PyObject **)&state->ContextType,
+        (PyObject **)&state->ContextType,      (PyObject **)&state->SyncType,
     };
 
     TraverseContext context = {.visit = visit, .arg = arg};
@@ -525,7 +541,7 @@ PyCaravanGL_Status caravan_clear(PyObject *module) {
         (PyObject **)&state->BufferType,       (PyObject **)&state->PipelineType,
         (PyObject **)&state->ProgramType,      (PyObject **)&state->VertexArrayType,
         (PyObject **)&state->UniformBatchType, (PyObject **)&state->TextureType,
-        (PyObject **)&state->ContextType,
+        (PyObject **)&state->ContextType,      (PyObject **)&state->SyncType,
     };
 
     return caravan_dispatch_members(members, sizeof(members) / sizeof(members[0]), op_clear_member,

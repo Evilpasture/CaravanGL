@@ -116,6 +116,14 @@ void cv_flush_garbage(PyCaravanContext *self) {
         }
         garbage->program_count = 0;
     }
+
+    if (garbage->sync_count > 0) {
+#pragma unroll 4
+        for (int i = 0; i < garbage->sync_count; i++) {
+            self->gl.DeleteSync(garbage->syncs[i]);
+        }
+        garbage->sync_count = 0;
+    }
 }
 
 /**

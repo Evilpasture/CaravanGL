@@ -9,3 +9,4 @@ extern const PyType_Spec Texture_spec;
 extern const PyType_Spec Framebuffer_spec;
 extern const PyType_Spec Sampler_spec;
 extern const PyType_Spec Context_spec;
+extern const PyType_Spec Sync_spec;
