@@ -11,37 +11,59 @@ static GLuint compile_shader(CaravanGLTable *OpenGL, GLenum type, const char *so
         return 0;
     }
 
-// 1. Trim leading whitespace
-// We move the pointer forward until we hit the first non-space character (like '#')
-#pragma unroll 2
-    while (*source && isspace((unsigned char)*source)) {
+    // 1. Skip UTF-8 Byte Order Mark (BOM) if present (EF BB BF)
+    // Some text editors and Python's 'utf-8-sig' encoding add this.
+    // OpenGL drivers will crash/error if they see this.
+    if ((unsigned char)source[0] == 0xEF && (unsigned char)source[1] == 0xBB &&
+        (unsigned char)source[2] == 0xBF) {
+        source += 3;
+    }
+
+// 2. Aggressive Leading Trim
+// We skip everything less than or equal to 'space' (ASCII 32).
+// This handles spaces, tabs, newlines, and carriage returns (\r).
+#pragma unroll 4
+    while (*source && (unsigned char)*source <= 32) {
         source++;
     }
 
-    // 2. Calculate length while trimming trailing whitespace
-    // OpenGL's ShaderSource allows us to pass an explicit length, so we don't
-    // need to create a temporary null-terminated string copy.
+    // Check if we actually have a shader left after trimming
+    if (*source == '\0') {
+        PyErr_SetString(PyExc_ValueError, "Shader source contains only whitespace.");
+        return 0;
+    }
+
+    // 3. Aggressive Trailing Trim
+    // We calculate the length from the new start point, then
+    // walk backward from the end to exclude trailing junk.
     GLint length = (GLint)strlen(source);
-#pragma unroll 2
-    while (length > 0 && isspace((unsigned char)source[length - 1])) {
+#pragma unroll 4
+    while (length > 0 && (unsigned char)source[length - 1] <= 32) {
         length--;
     }
 
     GLuint shader = OpenGL->CreateShader(type);
 
-    // 3. Pass the manipulated pointer and the trimmed length
+    // 4. Pass the manipulated pointer and the trimmed length
     OpenGL->ShaderSource(shader, 1, &source, &length);
     OpenGL->CompileShader(shader);
 
     GLint success = 0;
     OpenGL->GetShaderiv(shader, GL_COMPILE_STATUS, &success);
     if (!success) {
-        constexpr auto LOG_BUFFER_SIZE = 1024; // Increased for better error reporting
+        constexpr auto LOG_BUFFER_SIZE = 1024;
         char info_log[LOG_BUFFER_SIZE];
         OpenGL->GetShaderInfoLog(shader, LOG_BUFFER_SIZE, nullptr, info_log);
 
         const char *type_str = (type == GL_VERTEX_SHADER) ? "Vertex" : "Fragment";
-        PyErr_Format(PyExc_RuntimeError, "%s Shader Compilation Failed:\n%s", type_str, info_log);
+
+        // We include the first 32 chars of the failed shader in the error
+        // to help the user identify which one broke.
+        PyErr_Format(PyExc_RuntimeError,
+                     "%s Shader Compilation Failed!\n"
+                     "Source Preview: %.32s...\n"
+                     "Log: %s",
+                     type_str, source, info_log);
 
         OpenGL->DeleteShader(shader);
         return 0;
