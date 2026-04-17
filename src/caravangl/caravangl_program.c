@@ -6,9 +6,9 @@
 // Program Object
 // -----------------------------------------------------------------------------
 
-static GLuint compile_shader(CaravanGLTable *OpenGL, GLenum type, const char *source) {
+static GLuint compile_shader(const CaravanGLTable *const OpenGL, GLenum type, const char *source) {
     if (source == nullptr) [[clang::unlikely]]
-        return 0;
+        {return 0;}
 
     const char *orig_source = source;
 

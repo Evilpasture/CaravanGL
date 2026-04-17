@@ -25,7 +25,7 @@
  * caravangl.context() -> dict
  * Returns a snapshot of capabilities and driver info for the active context.
  */
-static inline PyObject *build_context_dict(CaravanContext *ctx, CaravanGLTable *OpenGL) {
+static inline PyObject *build_context_dict(CaravanContext *ctx, const CaravanGLTable *const OpenGL) {
     PyObject *caps =
         FastBuild_Dict("max_texture_size", ctx->caps.max_texture_size, "max_samples",
                        ctx->caps.max_samples, "support_compute", ctx->caps.support_compute,

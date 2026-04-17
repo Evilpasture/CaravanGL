@@ -13,7 +13,7 @@ thread_local PyCaravanContext *cv_active_context = nullptr;
  * Called once during caravan.init() (already inside the lock).
  */
 static void query_capabilities(PyCaravanContext *self) {
-    CaravanGLTable *OpenGL = &self->gl;
+    const CaravanGLTable *const OpenGL = &self->gl;
     CaravanContext *ctx = &self->ctx;
     if (OpenGL->GetIntegerv == nullptr) {
         return;
