@@ -29,7 +29,8 @@ PyCaravanGL_Slot Sync_dealloc(PyCaravanSync *self) {
                     self->sync_obj;
             } else {
                 // Garbage queue full fallback
-                fprintf(stderr, "[CaravanGL] Warning: Sync garbage queue full.\n");
+                // NOLINTNEXTLINE
+                (void)fprintf(stderr, "[CaravanGL] Warning: Sync garbage queue full.\n");
             }
             MagMutex_Unlock(&owning_context->ctx.state_lock);
         }

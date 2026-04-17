@@ -24,6 +24,7 @@ python_add_library(caravangl MODULE
     src/caravangl/caravangl_framebuffer.c
     src/caravangl/caravangl_sampler.c
     src/caravangl/caravangl_context.c
+    src/caravangl/caravangl_sync.c
 )
 
 # 3. Link the submodule and Python
