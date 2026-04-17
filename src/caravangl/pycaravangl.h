@@ -150,3 +150,9 @@ typedef struct {
     PyObject_HEAD PyCaravanContext *owning_context;
     GLsync sync_obj;
 } PyCaravanSync;
+
+typedef struct {
+    PyObject_HEAD PyCaravanContext *owning_context;
+    GLuint id;
+    GLenum target;
+} PyCaravanQuery;

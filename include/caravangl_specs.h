@@ -251,4 +251,7 @@ typedef struct CaravanGarbage {
 
     GLsync syncs[CARAVAN_GARBAGE_SIZE];
     size_t sync_count;
+
+    GLuint queries[CARAVAN_GARBAGE_SIZE];
+    size_t query_count;
 } CaravanGarbage;

@@ -306,6 +306,7 @@ static int init_types(PyObject *mod, CaravanState *state) {
         {&Sampler_spec, (PyObject **)&state->SamplerType, "Sampler"},
         {&Context_spec, (PyObject **)&state->ContextType, "Context"},
         {&Sync_spec, (PyObject **)&state->SyncType, "Sync"},
+        {&Query_spec, (PyObject **)&state->QueryType, "Query"},
     };
 
     auto mod_name = PyUnicode_FromString("caravangl");
@@ -456,6 +457,12 @@ static int init_constants(PyObject *mod) {
                   {"CONDITION_SATISFIED", GL_CONDITION_SATISFIED},
                   {"WAIT_FAILED", GL_WAIT_FAILED},
 
+                  {"TIME_ELAPSED", GL_TIME_ELAPSED},
+                  {"TIMESTAMP", GL_TIMESTAMP},
+                  {"SAMPLES_PASSED", GL_SAMPLES_PASSED},
+                  {"ANY_SAMPLES_PASSED", GL_ANY_SAMPLES_PASSED},
+                  {"PRIMITIVES_GENERATED", GL_PRIMITIVES_GENERATED},
+
                   // --- Build Metadata ---
                   {"FREE_THREADED",
 #if defined(Py_GIL_DISABLED) && Py_GIL_DISABLED
@@ -519,6 +526,7 @@ PyCaravanGL_Status caravan_traverse(PyObject *module, visitproc visit, void *arg
         (PyObject **)&state->ProgramType,      (PyObject **)&state->VertexArrayType,
         (PyObject **)&state->UniformBatchType, (PyObject **)&state->TextureType,
         (PyObject **)&state->ContextType,      (PyObject **)&state->SyncType,
+        (PyObject **)&state->QueryType,        (PyObject **)&state->FramebufferType,
     };
 
     TraverseContext context = {.visit = visit, .arg = arg};
@@ -542,7 +550,7 @@ PyCaravanGL_Status caravan_clear(PyObject *module) {
         (PyObject **)&state->ProgramType,      (PyObject **)&state->VertexArrayType,
         (PyObject **)&state->UniformBatchType, (PyObject **)&state->TextureType,
         (PyObject **)&state->ContextType,      (PyObject **)&state->SyncType,
-    };
+        (PyObject **)&state->QueryType,        (PyObject **)&state->FramebufferType};
 
     return caravan_dispatch_members(members, sizeof(members) / sizeof(members[0]), op_clear_member,
                                     nullptr);

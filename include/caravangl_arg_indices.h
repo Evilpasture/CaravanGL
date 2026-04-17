@@ -118,6 +118,10 @@
     X(IDX_CTX_LOADER, "loader", PyObject *, 1)                                                     \
     X(IDX_CTX_CALLBACK, "make_current_cb", PyObject *, 0)
 
+#define SCHEMA_SYNC_WAIT(X) X(IDX_SYNC_WAIT_SEC, "timeout_sec", float, false)
+
+#define SCHEMA_QUERY_INIT(X) X(IDX_QUERY_TARGET, "target", uint32_t, false)
+
 /** --- THE GENERATOR ENGINE --- **/
 
 #define GEN_ENUM(ID, NAME, TYPE, REQ) ID,
@@ -146,6 +150,8 @@ DEFINE_INDEX_GROUP(ClearColor, SCHEMA_CLEAR_COLOR)
 DEFINE_INDEX_GROUP(Viewport, SCHEMA_VIEWPORT)
 DEFINE_INDEX_GROUP(SamplerInit, SCHEMA_SAMPLER_INIT)
 DEFINE_INDEX_GROUP(ContextInit, SCHEMA_CONTEXT_INIT)
+DEFINE_INDEX_GROUP(SyncWait, SCHEMA_SYNC_WAIT)
+DEFINE_INDEX_GROUP(QueryInit, SCHEMA_QUERY_INIT)
 
 // Master list of all parsers
 #define FOR_ALL_PARSERS(X)                                                                         \
@@ -167,7 +173,9 @@ DEFINE_INDEX_GROUP(ContextInit, SCHEMA_CONTEXT_INIT)
     X(Clear, Clear, SCHEMA_CLEAR)                                                                  \
     X(ClearColor, ClearColor, SCHEMA_CLEAR_COLOR)                                                  \
     X(Viewport, Viewport, SCHEMA_VIEWPORT)                                                         \
-    X(SamplerInit, SamplerInit, SCHEMA_SAMPLER_INIT)
+    X(SamplerInit, SamplerInit, SCHEMA_SAMPLER_INIT)                                               \
+    X(SyncWait, SyncWait, SCHEMA_SYNC_WAIT)                                                        \
+    X(QueryInit, QueryInit, SCHEMA_QUERY_INIT)
 
 // Define specialized mappers to split the declarations
 #define MAP_ONLY_PARSER(Name, ...) FastParser Name##Parser;

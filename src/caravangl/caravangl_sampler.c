@@ -30,12 +30,12 @@ PyCaravanGL_Status Sampler_init(PyCaravanSampler *self, PyObject *args, PyObject
     return 0;
 }
 
-static int Sampler_traverse(PyCaravanSampler *self, visitproc visit, void *arg) {
+PyCaravanGL_Status Sampler_traverse(PyCaravanSampler *self, visitproc visit, void *arg) {
     Py_VISIT(self->owning_context);
     return 0;
 }
 
-static int Sampler_clear(PyCaravanSampler *self) {
+PyCaravanGL_Status Sampler_clear(PyCaravanSampler *self) {
     Py_CLEAR(self->owning_context);
     return 0;
 }

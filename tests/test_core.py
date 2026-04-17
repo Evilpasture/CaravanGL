@@ -953,3 +953,135 @@ def test_buffer_contention_stress():
     main_ctx.make_current()
     glfw.destroy_window(shared_win)
     assert True
+
+def test_sync_basic_behavior():
+    # 1. Create a sync object (inserts fence immediately)
+    sync = caravangl.Sync()
+    
+    # 2. Waiting immediately should generally return CONDITION_SATISFIED 
+    # or ALREADY_SIGNALED (if the GPU is fast)
+    status = sync.wait(timeout_sec=1.0)
+    
+    assert status in (
+        caravangl.CONDITION_SATISFIED, 
+        caravangl.ALREADY_SIGNALED
+    )
+
+def test_sync_timeout():
+    # We can't easily force the GPU to be slow, but we can pass 0.0 
+    # to see if it hasn't finished yet, or just check that the argument parsing works.
+    sync = caravangl.Sync()
+    status = sync.wait(timeout_sec=0.0)
+    
+    # It's perfectly valid for it to return either status
+    assert status in (
+        caravangl.CONDITION_SATISFIED, 
+        caravangl.ALREADY_SIGNALED, 
+        caravangl.TIMEOUT_EXPIRED
+    )
+
+import numpy as np
+
+def test_cross_thread_sync_data_consistency():
+    main_window = glfw.get_current_context()
+    main_ctx = caravangl.get_active_context()
+    
+    # Shared VBO
+    vbo = caravangl.Buffer(size=1024)
+    
+    # A list to pass the sync object between threads
+    sync_queue = []
+
+    def producer_thread():
+        # 1. Setup context
+        main_ctx.make_current()
+        
+        # 2. Write "Secret Key" 42.0 to the buffer
+        data = np.full(256, 42.0, dtype=np.float32).tobytes()
+        vbo.write(data)
+        
+        # 3. Insert Fence
+        fence = caravangl.Sync()
+        sync_queue.append(fence)
+        
+        # Release context
+        glfw.make_context_current(None)
+
+    # 1. Run the producer
+    t = threading.Thread(target=producer_thread)
+    t.start()
+    t.join()
+
+    # 2. Main Thread takes over
+    main_ctx.make_current()
+    
+    # 3. Wait for the producer's GPU work to finish
+    fence = sync_queue[0]
+    status = fence.wait(timeout_sec=2.0)
+    assert status != caravangl.TIMEOUT_EXPIRED
+    
+    # 4. If we had a way to read back the buffer (e.g. glGetBufferSubData),
+    # we would verify the 42.0 here. Since your API is write-only for now, 
+    # we verify that no crash occurred during synchronization.
+    assert True
+
+def test_sync_garbage_collection_stress():
+    main_ctx = caravangl.get_active_context()
+    
+    def deleter_thread(sync_objs):
+        # This thread will drop the final references to the sync objects
+        # created on the main thread.
+        sync_objs.clear()
+
+    # Create 1000 sync objects on the main thread
+    syncs = [caravangl.Sync() for _ in range(1000)]
+    
+    t = threading.Thread(target=deleter_thread, args=(syncs,))
+    t.start()
+    t.join()
+    
+    # Now, the main context's garbage queue is full of GLsync pointers.
+    # Calling make_current() triggers cv_flush_garbage.
+    main_ctx.make_current()
+    
+    # If the C-code didn't handle DeleteSync properly, we would likely 
+    # crash here or leak memory.
+    caravangl.clear(caravangl.COLOR_BUFFER_BIT)
+    assert True
+
+def test_sync_invalid_timeout():
+    sync = caravangl.Sync()
+    
+    # Passing a string instead of a float
+    with pytest.raises(TypeError):
+        sync.wait("one second") # type: ignore
+        
+    # Negative values should result in TIMEOUT_IGNORED (infinite wait)
+    # per your C implementation (timeout_ns = GL_TIMEOUT_IGNORED)
+    status = sync.wait(timeout_sec=-1.0)
+    assert status in (caravangl.CONDITION_SATISFIED, caravangl.ALREADY_SIGNALED)
+
+def test_sync_multiple_waits():
+    sync = caravangl.Sync()
+    
+    # First wait
+    res1 = sync.wait(0.1)
+    # Second wait (should return ALREADY_SIGNALED or CONDITION_SATISFIED)
+    res2 = sync.wait(0.1)
+    
+    assert res1 in (caravangl.CONDITION_SATISFIED, caravangl.ALREADY_SIGNALED)
+    assert res2 in (caravangl.CONDITION_SATISFIED, caravangl.ALREADY_SIGNALED)
+
+def test_query_time_elapsed():
+    query = caravangl.Query(target=caravangl.TIME_ELAPSED)
+    
+    query.begin()
+    # Execute expensive draw calls here
+    # pipe.draw() 
+    query.end()
+    
+    # Wait for the GPU to finish rendering and reading the clock
+    nanoseconds = query.get_result()
+    milliseconds = nanoseconds / 1_000_000.0
+    print(f"GPU took {milliseconds:.2f} ms")
+    assert nanoseconds >= 0

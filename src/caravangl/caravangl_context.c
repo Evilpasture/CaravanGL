@@ -124,6 +124,11 @@ void cv_flush_garbage(PyCaravanContext *self) {
         }
         garbage->sync_count = 0;
     }
+
+    if (garbage->query_count > 0) {
+        self->gl.DeleteQueries((GLsizei)garbage->query_count, garbage->queries);
+        garbage->query_count = 0;
+    }
 }
 
 /**

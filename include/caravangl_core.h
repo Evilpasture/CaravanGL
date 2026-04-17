@@ -1311,7 +1311,18 @@ typedef enum ImageFormatTupleIndex : uint8_t {
     X(void, DeleteSync, GLsync sync)                                                               \
     X(GLenum, ClientWaitSync, GLsync sync, GLbitfield flags, GLuint64 timeout)                     \
     X(void, WaitSync, GLsync sync, GLbitfield flags, GLuint64 timeout)                             \
-    X(void, Finish, void)
+    X(void, Finish, void)                                                                          \
+    X(void, GenQueries, GLsizei n, GLuint *ids)                                                    \
+    X(void, DeleteQueries, GLsizei n, const GLuint *ids)                                           \
+    X(GLboolean, IsQuery, GLuint id)                                                               \
+    X(void, BeginQuery, GLenum target, GLuint id)                                                  \
+    X(void, EndQuery, GLenum target)                                                               \
+    X(void, GetQueryiv, GLenum target, GLenum pname, GLint *params)                                \
+    X(void, GetQueryObjectiv, GLuint id, GLenum pname, GLint *params)                              \
+    X(void, GetQueryObjectuiv, GLuint id, GLenum pname, GLuint *params)                            \
+    X(void, QueryCounter, GLuint id, GLenum target)                                                \
+    X(void, GetQueryObjecti64v, GLuint id, GLenum pname, GLint64 *params)                          \
+    X(void, GetQueryObjectui64v, GLuint id, GLenum pname, GLuint64 *params)
 
 // ======================= OPENGL 4.2 CORE =======================
 #define GL_FUNCTIONS_4_2_CORE(X)                                                                   \
