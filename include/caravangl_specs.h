@@ -70,7 +70,7 @@ typedef struct CaravanFramebuffer {
 
 typedef struct CaravanRect {
     GLint x, y;
-    GLsizei w, h;
+    GLsizei width, height;
 } CaravanRect;
 
 // -----------------------------------------------------------------------------
@@ -99,6 +99,7 @@ typedef struct CaravanTextureBinding {
 typedef struct CaravanRenderState {
     bool cull_face_enabled;
     GLenum cull_face_mode;
+    GLenum front_face;
 
     // Depth
     bool depth_test_enabled;

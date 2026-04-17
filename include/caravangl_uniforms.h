@@ -85,6 +85,17 @@ static inline void u_mat4(CaravanState *state, GLint location, GLsizei count, co
     state->gl.UniformMatrix4fv(location, count, GL_FALSE, (const GLfloat *)ptr);
 }
 
+// -- Row-Major Wrappers (Using GL_TRUE) --
+static inline void u_mat2_rm(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.UniformMatrix2fv(location, count, GL_TRUE, (const GLfloat *)ptr);
+}
+static inline void u_mat3_rm(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.UniformMatrix3fv(location, count, GL_TRUE, (const GLfloat *)ptr);
+}
+static inline void u_mat4_rm(CaravanState *state, GLint location, GLsizei count, const void *ptr) {
+    state->gl.UniformMatrix4fv(location, count, GL_TRUE, (const GLfloat *)ptr);
+}
+
 // -- Dispatch Table --
 
 [[maybe_unused]] static const UniformUploadFn uniform_upload_table[UF_COUNT] = {
@@ -120,4 +131,9 @@ static inline void u_mat4(CaravanState *state, GLint location, GLsizei count, co
     [UF_MAT4x2] = u_mat4x2,
     [UF_MAT4x3] = u_mat4x3,
     [UF_MAT4] = u_mat4,
+
+    // Row-Major stuff
+    [UF_MAT2_RM] = u_mat2_rm,
+    [UF_MAT3_RM] = u_mat3_rm,
+    [UF_MAT4_RM] = u_mat4_rm,
 };

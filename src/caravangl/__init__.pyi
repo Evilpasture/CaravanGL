@@ -21,6 +21,7 @@ UF_2F: int
 UF_3F: int
 UF_4F: int
 UF_MAT4: int
+UF_MAT4_RM: int
 
 # Buffer Targets & Usage
 ARRAY_BUFFER: int
@@ -81,43 +82,30 @@ ONE_MINUS_SRC_ALPHA: int
 ONE: int
 FUNC_ADD: int
 
+# Sampler Constants
+NEAREST: int
+LINEAR: int
+REPEAT: int
+CLAMP_TO_EDGE: int
+
+# Faces
+CW: int
+CCW: int
+
 # Metadata
 FREE_THREADED: int
 DEBUG_BUILD: int
 
 # --- Module Level Functions ---
 
-def init(loader: object) -> None: 
-    """Initialize the OpenGL function table using a loader object."""
-    ...
-
-def enable_debug() -> None:
-    """Enable OpenGL 4.3+ Debug Output callback."""
-    ...
-
-def context() -> dict[str, Any]:
-    """Returns a dictionary containing hardware capabilities and driver info."""
-    ...
-
-def inspect(obj: object) -> dict[str, Any]:
-    """Returns the internal C/GPU state of a CaravanGL object."""
-    ...
-
-def clear(mask: int) -> None:
-    """Clear buffers using a bitmask (e.g., COLOR_BUFFER_BIT)."""
-    ...
-
-def clear_color(r: float, g: float, b: float, a: float) -> None:
-    """Set the clear color for the current framebuffer."""
-    ...
-
-def viewport(x: int, y: int, w: int, h: int) -> None:
-    """Set the OpenGL viewport region."""
-    ...
-
-def bind_default_framebuffer() -> None:
-    """Reverts rendering to the main window screen."""
-    ...
+def init(loader: object) -> None: ...
+def enable_debug() -> None: ...
+def context() -> dict[str, Any]: ...
+def inspect(obj: object) -> dict[str, Any]: ...
+def clear(mask: int) -> None: ...
+def clear_color(r: float, g: float, b: float, a: float) -> None: ...
+def viewport(x: int, y: int, width: int, height: int) -> None: ...
+def bind_default_framebuffer() -> None: ...
 
 # --- Classes ---
 
@@ -126,11 +114,14 @@ class Buffer:
     def write(self, data: _BufferProtocol, offset: int = 0) -> None: ...
     def bind_base(self, index: int) -> None: ...
 
+class Sampler:
+    def __init__(self, min_filter: int = ..., mag_filter: int = ..., wrap_s: int = ..., wrap_t: int = ...) -> None: ...
+
 class Texture:
     def __init__(self, target: int = ...) -> None: ...
     def upload(self, width: int, height: int, internal_format: int, format: int, type: int, 
                data: _BufferProtocol | None = None, level: int = 0, depth: int = 0) -> None: ...
-    def bind(self, unit: int) -> None: ...
+    def bind(self, unit: int, sampler: Sampler | None = None) -> None: ...
     def generate_mipmap(self) -> None: ...
 
 class Program:
@@ -140,7 +131,7 @@ class Program:
 class VertexArray:
     def __init__(self) -> None: ...
     def bind_attribute(self, location: int, buffer: Buffer, size: int, type: int, 
-                       normalized: int = 0, stride: int = 0, offset: int = 0) -> None: ...
+                       normalized: int = 0, stride: int = 0, offset: int = 0, divisor: int = 0) -> None: ...
     def bind_index_buffer(self, buffer: Buffer) -> None: ...
 
 class UniformBatch:
@@ -161,6 +152,7 @@ class Pipeline:
         depth_func: int = ..., 
         cull: int = 0,
         cull_mode: int = ...,
+        front_face: int = CCW,
         stencil_test: int = 0,
         stencil_func: int = ...,
         stencil_ref: int = 0,
@@ -191,7 +183,7 @@ class Framebuffer:
     def bind(self) -> None: ...
 
 __all__ = [
-    "Buffer", "Texture", "Program", "VertexArray", "UniformBatch", "Pipeline", "Framebuffer",
+    "Buffer", "Sampler", "Texture", "Program", "VertexArray", "UniformBatch", "Pipeline", "Framebuffer",
     "init", "enable_debug", "context", "inspect", "clear", "clear_color", "viewport", 
     "bind_default_framebuffer",
     "FLOAT", "UNSIGNED_BYTE", "UNSIGNED_SHORT", "UNSIGNED_INT", "UNSIGNED_INT_24_8",
@@ -206,5 +198,6 @@ __all__ = [
     "KEEP", "ZERO", "REPLACE", "INCR", "INCR_WRAP", "DECR", "DECR_WRAP", "INVERT",
     "FRONT", "BACK", "FRONT_AND_BACK",
     "SRC_ALPHA", "ONE_MINUS_SRC_ALPHA", "ONE", "FUNC_ADD",
+    "NEAREST", "LINEAR", "REPEAT", "CLAMP_TO_EDGE",
     "FREE_THREADED", "DEBUG_BUILD"
 ]

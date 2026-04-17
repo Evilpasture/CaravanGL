@@ -1119,6 +1119,9 @@ typedef enum UniformFunction : uint8_t {
     UF_MAT4x2,
     UF_MAT4x3,
     UF_MAT4,
+    UF_MAT2_RM,
+    UF_MAT3_RM,
+    UF_MAT4_RM,
     UF_COUNT,
 } UniformFunction;
 
@@ -1142,6 +1145,7 @@ typedef enum ImageFormatTupleIndex : uint8_t {
 
 // ======================= OPENGL 3.3 CORE =======================
 #define GL_FUNCTIONS_3_3_CORE(X)                                                                   \
+    X(void, FrontFace, GLenum mode)                                                                \
     X(void, CullFace, GLenum mode)                                                                 \
     X(void, Clear, GLbitfield mask)                                                                \
     X(void, TexParameteri, GLenum target, GLenum pname, GLint param)                               \

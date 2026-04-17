@@ -30,6 +30,7 @@
     X(IDX_PL_DFUNC, "depth_func", uint32_t, 0)                                                     \
     X(IDX_PL_CULL, "cull", int, 0)                                                                 \
     X(IDX_PL_CULL_MODE, "cull_mode", uint32_t, 0)                                                  \
+    X(IDX_PL_FRONT_FACE, "front_face", uint32_t, 0)                                                \
     X(IDX_PL_STENCIL, "stencil_test", int, 0)                                                      \
     X(IDX_PL_SFUNC, "stencil_func", uint32_t, 0)                                                   \
     X(IDX_PL_SREF, "stencil_ref", int, 0)                                                          \
@@ -104,8 +105,8 @@
 #define SCHEMA_VIEWPORT(X)                                                                         \
     X(IDX_VP_X, "x", int, 1)                                                                       \
     X(IDX_VP_Y, "y", int, 1)                                                                       \
-    X(IDX_VP_W, "w", int, 1)                                                                       \
-    X(IDX_VP_H, "h", int, 1)
+    X(IDX_VP_W, "width", int, 1)                                                                   \
+    X(IDX_VP_H, "height", int, 1)
 
 #define SCHEMA_SAMPLER_INIT(X)                                                                     \
     X(IDX_SAMP_MIN, "min_filter", uint32_t, 0)                                                     \

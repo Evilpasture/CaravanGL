@@ -30,6 +30,7 @@ PyCaravanGL_Status Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObje
 
     int cull = 0;
     uint32_t cull_mode = GL_BACK;
+    uint32_t front_face = GL_CCW;
     int blend = 0;
     uint32_t b_src_rgb = GL_SRC_ALPHA;
     uint32_t b_dst_rgb = GL_ONE_MINUS_SRC_ALPHA;
@@ -38,30 +39,33 @@ PyCaravanGL_Status Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObje
     uint32_t b_eq_rgb = GL_FUNC_ADD;
     uint32_t b_eq_a = GL_FUNC_ADD;
 
-    void *targets[PipelineInit_COUNT] = {[IDX_PL_PROGRAM] = (void *)&py_program,
-                                         [IDX_PL_VAO] = (void *)&py_vao,
-                                         [IDX_PL_TOPO] = (void *)&topology,
-                                         [IDX_PL_IDX_TYP] = (void *)&index_type,
-                                         [IDX_PL_DEPTH] = (void *)&depth_test,
-                                         [IDX_PL_DWRITE] = (void *)&depth_write,
-                                         [IDX_PL_DFUNC] = (void *)&depth_func,
-                                         [IDX_PL_CULL] = (void *)&cull,
-                                         [IDX_PL_CULL_MODE] = (void *)&cull_mode,
-                                         [IDX_PL_STENCIL] = (void *)&stencil_test,
-                                         [IDX_PL_SFUNC] = (void *)&stencil_func,
-                                         [IDX_PL_SREF] = (void *)&stencil_ref,
-                                         [IDX_PL_SRMASK] = (void *)&stencil_read_mask,
-                                         [IDX_PL_SWMASK] = (void *)&stencil_write_mask,
-                                         [IDX_PL_SFAIL] = (void *)&stencil_fail,
-                                         [IDX_PL_SZFAIL] = (void *)&stencil_zfail,
-                                         [IDX_PL_SZPASS] = (void *)&stencil_zpass,
-                                         [IDX_PL_BLEND] = (void *)&blend,
-                                         [IDX_PL_B_SRC_RGB] = (void *)&b_src_rgb,
-                                         [IDX_PL_B_DST_RGB] = (void *)&b_dst_rgb,
-                                         [IDX_PL_B_SRC_A] = (void *)&b_src_a,
-                                         [IDX_PL_B_DST_A] = (void *)&b_dst_a,
-                                         [IDX_PL_B_EQ_RGB] = (void *)&b_eq_rgb,
-                                         [IDX_PL_B_EQ_A] = (void *)&b_eq_a};
+    void *targets[PipelineInit_COUNT] = {
+        [IDX_PL_PROGRAM] = (void *)&py_program,
+        [IDX_PL_VAO] = (void *)&py_vao,
+        [IDX_PL_TOPO] = (void *)&topology,
+        [IDX_PL_IDX_TYP] = (void *)&index_type,
+        [IDX_PL_DEPTH] = (void *)&depth_test,
+        [IDX_PL_DWRITE] = (void *)&depth_write,
+        [IDX_PL_DFUNC] = (void *)&depth_func,
+        [IDX_PL_CULL] = (void *)&cull,
+        [IDX_PL_CULL_MODE] = (void *)&cull_mode,
+        [IDX_PL_STENCIL] = (void *)&stencil_test,
+        [IDX_PL_SFUNC] = (void *)&stencil_func,
+        [IDX_PL_SREF] = (void *)&stencil_ref,
+        [IDX_PL_SRMASK] = (void *)&stencil_read_mask,
+        [IDX_PL_SWMASK] = (void *)&stencil_write_mask,
+        [IDX_PL_SFAIL] = (void *)&stencil_fail,
+        [IDX_PL_SZFAIL] = (void *)&stencil_zfail,
+        [IDX_PL_SZPASS] = (void *)&stencil_zpass,
+        [IDX_PL_BLEND] = (void *)&blend,
+        [IDX_PL_B_SRC_RGB] = (void *)&b_src_rgb,
+        [IDX_PL_B_DST_RGB] = (void *)&b_dst_rgb,
+        [IDX_PL_B_SRC_A] = (void *)&b_src_a,
+        [IDX_PL_B_DST_A] = (void *)&b_dst_a,
+        [IDX_PL_B_EQ_RGB] = (void *)&b_eq_rgb,
+        [IDX_PL_B_EQ_A] = (void *)&b_eq_a,
+        [IDX_PL_FRONT_FACE] = &front_face,
+    };
 
     if (!FastParse_Unified(args, kwds, nullptr, &state->parsers.PipelineInitParser, targets)) {
         return -1;
@@ -108,6 +112,7 @@ PyCaravanGL_Status Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObje
         // --- Culling ---
         self->render_state.cull_face_enabled = (bool)cull; // Use the name from 'targets'
         self->render_state.cull_face_mode = cull_mode;
+        self->render_state.front_face = front_face;
 
         // --- Blending ---
         self->render_state.blend_enabled = (bool)blend; // Use the name from 'targets'

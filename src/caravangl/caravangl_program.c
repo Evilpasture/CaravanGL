@@ -1,21 +1,47 @@
 #include "pycaravangl.h"
+#include <ctype.h> // Required for isspace()
 
 // -----------------------------------------------------------------------------
 // Program Object
 // -----------------------------------------------------------------------------
 
 static GLuint compile_shader(CaravanGLTable *OpenGL, GLenum type, const char *source) {
+    if (source == nullptr) [[clang::unlikely]] {
+        return 0;
+    }
+
+// 1. Trim leading whitespace
+// We move the pointer forward until we hit the first non-space character (like '#')
+#pragma unroll 2
+    while (*source && isspace((unsigned char)*source)) {
+        source++;
+    }
+
+    // 2. Calculate length while trimming trailing whitespace
+    // OpenGL's ShaderSource allows us to pass an explicit length, so we don't
+    // need to create a temporary null-terminated string copy.
+    GLint length = (GLint)strlen(source);
+#pragma unroll 2
+    while (length > 0 && isspace((unsigned char)source[length - 1])) {
+        length--;
+    }
+
     GLuint shader = OpenGL->CreateShader(type);
-    OpenGL->ShaderSource(shader, 1, &source, nullptr);
+
+    // 3. Pass the manipulated pointer and the trimmed length
+    OpenGL->ShaderSource(shader, 1, &source, &length);
     OpenGL->CompileShader(shader);
 
     GLint success = 0;
     OpenGL->GetShaderiv(shader, GL_COMPILE_STATUS, &success);
     if (!success) {
-        constexpr auto LOG_BUFFER_SIZE = 512;
+        constexpr auto LOG_BUFFER_SIZE = 1024; // Increased for better error reporting
         char info_log[LOG_BUFFER_SIZE];
         OpenGL->GetShaderInfoLog(shader, LOG_BUFFER_SIZE, nullptr, info_log);
-        PyErr_Format(PyExc_RuntimeError, "Shader Compilation Failed:\n%s", info_log);
+
+        const char *type_str = (type == GL_VERTEX_SHADER) ? "Vertex" : "Fragment";
+        PyErr_Format(PyExc_RuntimeError, "%s Shader Compilation Failed:\n%s", type_str, info_log);
+
         OpenGL->DeleteShader(shader);
         return 0;
     }

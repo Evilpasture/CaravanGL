@@ -421,7 +421,7 @@ def test_framebuffer_incomplete():
 def test_viewport_state_update():
     """Verify viewport updates properly sync with the isolated C-context."""
     # Change viewport to an arbitrary resolution
-    caravangl.viewport(x=15, y=25, w=1920, h=1080)
+    caravangl.viewport(x=15, y=25, width=1920, height=1080)
     
     # Ask the C-backend for a snapshot of the context state
     ctx = caravangl.context()
@@ -450,14 +450,14 @@ def test_fbo_render_context_switch():
     
     # --- PASS 1: Render to FBO ---
     fbo.bind()
-    caravangl.viewport(x=0, y=0, w=64, h=64)
+    caravangl.viewport(x=0, y=0, width=64, height=64)
     caravangl.clear_color(1.0, 0.0, 0.0, 1.0)
     caravangl.clear(GL_COLOR_BUFFER_BIT)
     pipe.draw()
     
     # --- PASS 2: Render to Screen ---
     caravangl.bind_default_framebuffer()
-    caravangl.viewport(x=0, y=0, w=800, h=600)
+    caravangl.viewport(x=0, y=0, width=800, height=600)
     caravangl.clear_color(0.0, 0.0, 0.0, 1.0)
     caravangl.clear(GL_COLOR_BUFFER_BIT)
     

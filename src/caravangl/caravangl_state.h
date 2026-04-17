@@ -66,9 +66,9 @@ static inline void cv_bind_fbo(CaravanState *state, GLFramebufferTarget target, 
 [[gnu::always_inline, gnu::hot]]
 static inline void cv_bind_viewport(CaravanState *state, const CaravanRect *viewport) {
     CaravanRect *cview = &state->ctx.viewport;
-    if (viewport->x != cview->x || viewport->y != cview->y || viewport->w != cview->w ||
-        viewport->h != cview->h) [[clang::unlikely]] {
-        state->gl.Viewport(viewport->x, viewport->y, viewport->w, viewport->h);
+    if (viewport->x != cview->x || viewport->y != cview->y || viewport->width != cview->width ||
+        viewport->height != cview->height) [[clang::unlikely]] {
+        state->gl.Viewport(viewport->x, viewport->y, viewport->width, viewport->height);
         *cview = *viewport;
     }
 }
@@ -196,9 +196,15 @@ static inline void cv_sync_render_state(CaravanState *state, const CaravanRender
                                     : state->gl.Disable(GL_CULL_FACE);
         curr->cull_face_enabled = req->cull_face_enabled;
     }
-    if (req->cull_face_enabled && curr->cull_face_mode != req->cull_face_mode) {
-        state->gl.CullFace(req->cull_face_mode);
-        curr->cull_face_mode = req->cull_face_mode;
+    if (req->cull_face_enabled) {
+        if (curr->cull_face_mode != req->cull_face_mode) {
+            state->gl.CullFace(req->cull_face_mode);
+            curr->cull_face_mode = req->cull_face_mode;
+        }
+        if (curr->front_face != req->front_face) {
+            state->gl.FrontFace(req->front_face);
+            curr->front_face = req->front_face;
+        }
     }
 
     // 4. Blending Sync

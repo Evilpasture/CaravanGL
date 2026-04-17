@@ -45,8 +45,8 @@ static void query_capabilities(CaravanState *state) {
         // Viewport
         GLint viewport[4] = {};
         OpenGL->GetIntegerv(GL_VIEWPORT, viewport);
-        state->ctx.viewport =
-            (CaravanRect){.x = viewport[0], .y = viewport[1], .w = viewport[2], .h = viewport[3]};
+        state->ctx.viewport = (CaravanRect){
+            .x = viewport[0], .y = viewport[1], .width = viewport[2], .height = viewport[3]};
     }
 
 #ifndef __APPLE__
@@ -121,7 +121,7 @@ static inline PyObject *build_context_dict(CaravanState *state, CaravanGLTable *
 
     return FastBuild_Dict("caps", caps, "info", info, "viewport",
                           FastBuild_Tuple(state->ctx.viewport.x, state->ctx.viewport.y,
-                                          state->ctx.viewport.w, state->ctx.viewport.h));
+                                          state->ctx.viewport.width, state->ctx.viewport.height));
 }
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 PyCaravanGL_API caravan_meth_context(PyObject *mod, [[maybe_unused]] PyObject *args) {
@@ -284,17 +284,19 @@ PyCaravanGL_API caravan_bind_default_framebuffer(PyObject *mod, [[maybe_unused]]
 PyCaravanGL_API caravan_viewport(PyObject *mod, PyObject *const *args, Py_ssize_t nargs,
                                  PyObject *kwnames) {
     CaravanState *state = get_caravan_state(mod);
-    int x = 0;
-    int y = 0;
-    int w = 0;
-    int h = 0;
-    void *targets[Viewport_COUNT] = {&x, &y, &w, &h};
+    int left_offset = 0;
+    int bottom_offset = 0;
+    int width = 0;
+    int height = 0;
+    void *targets[Viewport_COUNT] = {&left_offset, &bottom_offset, &width, &height};
     if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.ViewportParser, targets)) {
         return nullptr;
     }
 
     WithCaravanGL(mod, OpenGL) {
-        cv_bind_viewport(state, &(CaravanRect){x, y, w, h});
+        cv_bind_viewport(
+            state,
+            &(CaravanRect){.x = left_offset, .y = bottom_offset, .width = width, .height = height});
     }
     Py_RETURN_NONE;
 }
@@ -506,6 +508,12 @@ static int init_constants(PyObject *mod) {
                   {"LINEAR", GL_LINEAR},
                   {"CLAMP_TO_EDGE", GL_CLAMP_TO_EDGE},
                   {"REPEAT", GL_REPEAT},
+
+                  {"UF_MAT4", UF_MAT4},
+                  {"UF_MAT4_RM", UF_MAT4_RM},
+
+                  {"CW", GL_CW},
+                  {"CCW", GL_CCW},
 
                   // --- Build Metadata ---
                   {"FREE_THREADED",
