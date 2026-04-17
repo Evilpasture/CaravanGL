@@ -47,11 +47,24 @@ class GLLoader:
             return 0
         val = ctypes.cast(ptr, ctypes.c_void_p).value
         return val if val is not None else 0
+    
+def create_shared_context(main_window):
+    """Creates a new GLFW window and CaravanGL context shared with the main window."""
+    # Create a hidden window that shares resources with the main window
+    shared_window = glfw.create_window(1, 1, "Shared Context", None, main_window)
+    if not shared_window:
+        raise RuntimeError("Failed to create shared GLFW window")
+    
+    # Note: We don't make it current here; the worker thread will do it
+    ctx = caravangl.Context(loader=GLLoader())
+    
+    return shared_window, ctx
 
 @pytest.fixture(scope="session", autouse=True)
 def gl_context():
     if not glfw.init():
         pytest.skip("Failed to initialize GLFW.")
+    
     glfw.window_hint(glfw.VISIBLE, glfw.FALSE)
     glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
     glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 3)
@@ -64,9 +77,21 @@ def gl_context():
         glfw.terminate()
         pytest.skip("Failed to create GLFW context.")
 
+    # 1. Tell GLFW to make the window current on this thread
     glfw.make_context_current(window)
-    caravangl.Context(loader=GLLoader())
+    
+    # 2. Create the CaravanGL Context object
+    # In the new architecture, we store this object.
+    ctx = caravangl.Context(loader=GLLoader())
+
+    ctx.os_make_current_cb = lambda: glfw.make_context_current(window)
+    
+    # 3. CRITICAL: Tell CaravanGL to make this context active for the current thread.
+    # This sets the thread_local cv_active_context pointer in C.
+    ctx.make_current()
+    
     yield window
+    
     glfw.destroy_window(window)
     glfw.terminate()
 
@@ -816,4 +841,115 @@ def test_multi_sampler_draw_consistency():
     t2.bind(unit=0, sampler=s_linear)
     
     pipe.draw()
+    assert True
+
+import threading
+
+def test_parallel_context_rendering():
+    main_window = glfw.get_current_context()
+    
+    # 1. Create the second window
+    shared_win = glfw.create_window(1, 1, "Shared Context", None, main_window)
+    
+    # 2. TEMPORARILY make it current on the main thread so symbols can load
+    glfw.make_context_current(shared_win)
+    ctx2 = caravangl.Context(loader=GLLoader())
+    
+    # 3. Setup the OS callback for the future
+    ctx2.os_make_current_cb = lambda: glfw.make_context_current(shared_win)
+    
+    # 4. RELEASE both contexts from the main thread so workers can use them
+    glfw.make_context_current(None)
+
+    def render_work(ctx, window, color):
+        # This will now succeed because the context is not 'held' by the main thread
+        ctx.make_current() 
+        caravangl.clear_color(*color)
+        caravangl.clear(GL_COLOR_BUFFER_BIT)
+
+    # Note: main context already had its symbols loaded by the fixture
+    t1 = threading.Thread(target=render_work, args=(caravangl.get_active_context(), main_window, (1, 0, 0, 1)))
+    t2 = threading.Thread(target=render_work, args=(ctx2, shared_win, (0, 1, 0, 1)))
+    
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+    
+    glfw.destroy_window(shared_win)
+    # Restore main thread context for remaining tests
+    caravangl.get_active_context().make_current()
+
+def test_cross_thread_garbage_collection():
+    tex = caravangl.Texture()
+    tex.upload(64, 64, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE, None)
+    
+    # Put in a list and delete the local name
+    container = [tex]
+    del tex 
+
+    def worker_thread(c):
+        # Drops the final reference on THIS thread
+        obj = c.pop()
+        del obj 
+
+    t = threading.Thread(target=worker_thread, args=(container,))
+    t.start()
+    t.join()
+    
+    # This will now trigger cv_flush_garbage on the main thread's context
+    ctx = caravangl.get_active_context()
+    ctx.make_current()
+    
+    assert True
+
+def test_buffer_contention_stress():
+    vbo = caravangl.Buffer(size=1024, usage=GL_DYNAMIC_DRAW)
+    main_window = glfw.get_current_context()
+    
+    # 1. CAPTURE the main context while we are still on the main thread
+    main_ctx = caravangl.get_active_context()
+    
+    # 2. Setup shared context
+    shared_win = glfw.create_window(1, 1, "Stress Win", None, main_window)
+    
+    # 3. Make current temporarily to load function pointers
+    glfw.make_context_current(shared_win)
+    ctx2 = caravangl.Context(loader=GLLoader())
+    ctx2.os_make_current_cb = lambda: glfw.make_context_current(shared_win)
+    
+    # 4. Release contexts so workers can take them
+    glfw.make_context_current(None)
+    
+    stop_event = threading.Event()
+
+    def writer():
+        ctx2.make_current() 
+        while not stop_event.is_set():
+            data = np.random.randint(0, 255, 10, dtype=np.uint8).tobytes()
+            vbo.write(data=data, offset=0)
+            
+    def reader(ctx_to_use):
+        # Use the context passed from the main thread
+        ctx_to_use.make_current()
+        while not stop_event.is_set():
+            vbo.bind_base(index=0)
+            
+    # Pass main_ctx into the reader thread
+    t_write = threading.Thread(target=writer)
+    t_read = threading.Thread(target=reader, args=(main_ctx,))
+    
+    t_write.start()
+    t_read.start()
+    
+    import time
+    time.sleep(0.5)
+    stop_event.set()
+    
+    t_write.join()
+    t_read.join()
+    
+    # Cleanup: restore main thread context for subsequent tests
+    main_ctx.make_current()
+    glfw.destroy_window(shared_win)
     assert True

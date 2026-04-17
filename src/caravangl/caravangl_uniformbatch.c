@@ -121,27 +121,33 @@ PyCaravanGL_API UniformBatch_get_data(PyCaravanUniformBatch *self, [[maybe_unuse
     return PyMemoryView_FromBuffer(&view);
 }
 
-static const PyGetSetDef UniformBatch_getset[] = {{"data", (getter)UniformBatch_get_data, nullptr,
-                                                   "Zero-copy access to the uniform payload memory",
-                                                   nullptr},
-                                                  {}};
-
-static const PyMethodDef UniformBatch_methods[] = {
-    {"add", (PyCFunction)(void (*)(void))UniformBatch_add, METH_FASTCALL | METH_KEYWORDS,
-     "Register a uniform and get its byte offset."},
-    {}};
-
-static const PyType_Slot UniformBatch_slots[] = {
-    {Py_tp_init, UniformBatch_init},
-    {Py_tp_dealloc, UniformBatch_dealloc},
-    {Py_tp_methods, (PyMethodDef *)UniformBatch_methods},
-    {Py_tp_getset, (PyGetSetDef *)UniformBatch_getset},
-    {}};
-
 // NOLINTNEXTLINE(misc-use-internal-linkage)
 const PyType_Spec UniformBatch_spec = {
     .name = "caravangl.UniformBatch",
     .basicsize = sizeof(PyCaravanUniformBatch),
     .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
-    .slots = (PyType_Slot *)UniformBatch_slots,
+    .slots =
+        (PyType_Slot[]){
+
+            {Py_tp_init, UniformBatch_init},
+            {Py_tp_dealloc, UniformBatch_dealloc},
+            {Py_tp_methods,
+             (PyMethodDef[]){
+
+                 {"add", CARAVAN_CAST(UniformBatch_add), METH_FASTCALL | METH_KEYWORDS,
+                  "Register a uniform and get its byte offset."},
+                 {}}
+
+            },
+            {Py_tp_getset,
+             (PyGetSetDef[]){
+
+                 {"data", (getter)UniformBatch_get_data, nullptr,
+                  "Zero-copy access to the uniform payload memory", nullptr},
+                 {}}
+
+            },
+            {}
+
+        },
 };

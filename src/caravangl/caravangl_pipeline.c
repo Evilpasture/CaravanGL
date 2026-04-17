@@ -38,31 +38,20 @@ PyCaravanGL_Status Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObje
     uint32_t b_eq_rgb = GL_FUNC_ADD;
     uint32_t b_eq_a = GL_FUNC_ADD;
 
-    void *targets[PipelineInit_COUNT] = {[IDX_PL_PROGRAM] = (void *)&py_program,
-                                         [IDX_PL_VAO] = (void *)&py_vao,
-                                         [IDX_PL_TOPO] = &topology,
-                                         [IDX_PL_IDX_TYP] = &index_type,
-                                         [IDX_PL_DEPTH] = &depth_test,
-                                         [IDX_PL_DWRITE] = &depth_write,
-                                         [IDX_PL_DFUNC] = &depth_func,
-                                         [IDX_PL_CULL] = &cull,
-                                         [IDX_PL_CULL_MODE] = &cull_mode,
-                                         [IDX_PL_FRONT_FACE] = &front_face,
-                                         [IDX_PL_STENCIL] = &stencil_test,
-                                         [IDX_PL_SFUNC] = &s_func,
-                                         [IDX_PL_SREF] = &s_ref,
-                                         [IDX_PL_SRMASK] = &s_read,
-                                         [IDX_PL_SWMASK] = &s_write,
-                                         [IDX_PL_SFAIL] = &s_fail,
-                                         [IDX_PL_SZFAIL] = &s_zfail,
-                                         [IDX_PL_SZPASS] = &s_zpass,
-                                         [IDX_PL_BLEND] = &blend,
-                                         [IDX_PL_B_SRC_RGB] = &b_src_rgb,
-                                         [IDX_PL_B_DST_RGB] = &b_dst_rgb,
-                                         [IDX_PL_B_SRC_A] = &b_src_a,
-                                         [IDX_PL_B_DST_A] = &b_dst_a,
-                                         [IDX_PL_B_EQ_RGB] = &b_eq_rgb,
-                                         [IDX_PL_B_EQ_A] = &b_eq_a};
+    void *targets[PipelineInit_COUNT] = {
+        [IDX_PL_PROGRAM] = (void *)&py_program,   [IDX_PL_VAO] = (void *)&py_vao,
+        [IDX_PL_TOPO] = (void *)&topology,        [IDX_PL_IDX_TYP] = (void *)&index_type,
+        [IDX_PL_DEPTH] = (void *)&depth_test,     [IDX_PL_DWRITE] = (void *)&depth_write,
+        [IDX_PL_DFUNC] = (void *)&depth_func,     [IDX_PL_CULL] = (void *)&cull,
+        [IDX_PL_CULL_MODE] = (void *)&cull_mode,  [IDX_PL_FRONT_FACE] = (void *)&front_face,
+        [IDX_PL_STENCIL] = (void *)&stencil_test, [IDX_PL_SFUNC] = (void *)&s_func,
+        [IDX_PL_SREF] = (void *)&s_ref,           [IDX_PL_SRMASK] = (void *)&s_read,
+        [IDX_PL_SWMASK] = (void *)&s_write,       [IDX_PL_SFAIL] = (void *)&s_fail,
+        [IDX_PL_SZFAIL] = (void *)&s_zfail,       [IDX_PL_SZPASS] = (void *)&s_zpass,
+        [IDX_PL_BLEND] = (void *)&blend,          [IDX_PL_B_SRC_RGB] = (void *)&b_src_rgb,
+        [IDX_PL_B_DST_RGB] = (void *)&b_dst_rgb,  [IDX_PL_B_SRC_A] = (void *)&b_src_a,
+        [IDX_PL_B_DST_A] = (void *)&b_dst_a,      [IDX_PL_B_EQ_RGB] = (void *)&b_eq_rgb,
+        [IDX_PL_B_EQ_A] = (void *)&b_eq_a};
 
     if (!FastParse_Unified(args, kwds, nullptr, &state->parsers.PipelineInitParser, targets)) {
         return -1;
@@ -141,7 +130,7 @@ PyCaravanGL_API Pipeline_upload_uniforms(PyCaravanPipeline *self, PyObject *cons
         return nullptr;
     }
 
-    PyCaravanUniformBatch *batch = (PyCaravanUniformBatch *)py_batch;
+    auto batch = (PyCaravanUniformBatch *)py_batch;
 
     WithActiveGL(OpenGL, cv_state, nullptr) {
         cv_bind_program(cv_state, OpenGL, self->program);
@@ -223,7 +212,6 @@ PyCaravanGL_Slot Pipeline_dealloc(PyCaravanPipeline *self) {
     Py_DECREF(type);
 }
 
-// ... getter for params remains the same ...
 /**
  * Getter for .params: Exposes the memoryview for zero-copy mutation
  */
@@ -247,32 +235,40 @@ PyCaravanGL_API Pipeline_get_params(PyCaravanPipeline *self, [[maybe_unused]] vo
     return PyMemoryView_FromBuffer(&view);
 }
 
-static const PyGetSetDef Pipeline_getset[] = {
-    {"params", (getter)Pipeline_get_params, nullptr, "Direct access to draw parameters", nullptr},
-    {}};
-
-static const PyMethodDef Pipeline_methods[] = {
-    {"upload_uniforms", (PyCFunction)(void (*)(void))Pipeline_upload_uniforms,
-     METH_FASTCALL | METH_KEYWORDS, nullptr},
-    {"draw", (PyCFunction)(void (*)(void))Pipeline_draw, METH_NOARGS, "Execute the draw call."},
-    {}};
-
-static const PyType_Slot Pipeline_slots[] = {
-    {Py_tp_new, PyType_GenericNew},
-    {Py_tp_init, Pipeline_init},
-    {Py_tp_dealloc, Pipeline_dealloc},
-    {Py_tp_traverse, Pipeline_traverse},
-    {Py_tp_clear, Pipeline_clear},
-    {Py_tp_methods, (PyMethodDef *)Pipeline_methods},
-    {Py_tp_getset, (PyGetSetDef *)Pipeline_getset},
-    {Py_tp_doc, "CaravanGL Pipeline: Immutable Draw State"},
-    {}};
-
 // NOLINTNEXTLINE(misc-use-internal-linkage)
 const PyType_Spec Pipeline_spec = {
     .name = "caravangl.Pipeline",
     .basicsize = sizeof(PyCaravanPipeline),
     .itemsize = 0,
     .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,
-    .slots = (PyType_Slot *)Pipeline_slots,
+    .slots =
+        (PyType_Slot[]){
+
+            {Py_tp_new, PyType_GenericNew},
+            {Py_tp_init, Pipeline_init},
+            {Py_tp_dealloc, Pipeline_dealloc},
+            {Py_tp_traverse, Pipeline_traverse},
+            {Py_tp_clear, Pipeline_clear},
+            {Py_tp_methods,
+             (PyMethodDef[]){
+
+                 {"upload_uniforms", CARAVAN_CAST(Pipeline_upload_uniforms),
+                  METH_FASTCALL | METH_KEYWORDS, nullptr},
+                 {"draw", (PyCFunction)Pipeline_draw, METH_NOARGS, "Execute the draw call."},
+                 {}}
+
+            },
+            {Py_tp_getset,
+
+             (PyGetSetDef[]){
+
+                 {"params", (getter)Pipeline_get_params, nullptr,
+                  "Direct access to draw parameters", nullptr},
+                 {}}
+
+            },
+            {Py_tp_doc, "CaravanGL Pipeline: Immutable Draw State"},
+            {}
+
+        },
 };

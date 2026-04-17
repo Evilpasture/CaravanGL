@@ -120,26 +120,31 @@ PyCaravanGL_API Buffer_bind_base(PyCaravanBuffer *self, PyObject *const *args, P
     Py_RETURN_NONE;
 }
 
-static const PyMethodDef Buffer_methods[] = {
-    {"write", (PyCFunction)(void (*)(void))Buffer_write, METH_FASTCALL | METH_KEYWORDS,
-     "Write data to buffer."},
-    {"bind_base", (PyCFunction)(void (*)(void))Buffer_bind_base, METH_FASTCALL | METH_KEYWORDS,
-     "Bind as indexed resource."},
-    {nullptr}};
-
-static const PyType_Slot Buffer_slots[] = {{Py_tp_init, Buffer_init},
-                                           {Py_tp_dealloc, Buffer_dealloc},
-                                           {Py_tp_traverse, Buffer_traverse},
-                                           {Py_tp_clear, Buffer_clear},
-                                           {Py_tp_methods, (PyMethodDef *)Buffer_methods},
-                                           {Py_tp_doc, "CaravanGL Buffer Object (VBO, IBO, UBO)"},
-                                           {0, nullptr}};
-
 // NOLINTNEXTLINE(misc-use-internal-linkage)
 const PyType_Spec Buffer_spec = {
     .name = "caravangl.Buffer",
     .basicsize = sizeof(PyCaravanBuffer),
     .itemsize = 0,
     .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,
-    .slots = (PyType_Slot *)Buffer_slots,
+    .slots =
+        (PyType_Slot[]){
+
+            {Py_tp_init, Buffer_init},
+            {Py_tp_dealloc, Buffer_dealloc},
+            {Py_tp_traverse, Buffer_traverse},
+            {Py_tp_clear, Buffer_clear},
+            {Py_tp_methods,
+             (PyMethodDef[]){
+
+                 {"write", CARAVAN_CAST(Buffer_write), METH_FASTCALL | METH_KEYWORDS,
+                  "Write data to buffer."},
+                 {"bind_base", CARAVAN_CAST(Buffer_bind_base), METH_FASTCALL | METH_KEYWORDS,
+                  "Bind as indexed resource."},
+                 {}}
+
+            },
+            {Py_tp_doc, "CaravanGL Buffer Object (VBO, IBO, UBO)"},
+            {}
+
+        },
 };

@@ -229,6 +229,19 @@ PyCaravanGL_API caravan_viewport(PyObject *mod, PyObject *const *args, Py_ssize_
     Py_RETURN_NONE;
 }
 
+/**
+ * caravangl.get_active_context() -> caravangl.Context | None
+ * Allows Python to see which context is active on the current thread.
+ */
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+PyCaravanGL_API caravan_get_active_context([[maybe_unused]] PyObject *mod,
+                                           [[maybe_unused]] PyObject *args) {
+    if (cv_active_context) {
+        return Py_NewRef(cv_active_context);
+    }
+    Py_RETURN_NONE;
+}
+
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 PyCaravanGL_API caravan_meth_enable_debug([[maybe_unused]] PyObject *mod,
                                           [[maybe_unused]] PyObject *args) {
@@ -271,21 +284,6 @@ PyCaravanGL_API caravan_meth_enable_debug([[maybe_unused]] PyObject *mod,
     return nullptr;
 #endif
 }
-
-static const PyMethodDef caravan_methods[] = {
-    {"enable_debug", (PyCFunction)caravan_meth_enable_debug, METH_NOARGS, "Enable GL Debug Output"},
-    {"context", (PyCFunction)(void (*)(void))caravan_meth_context, METH_NOARGS, "Get capabilities"},
-    {"inspect", (PyCFunction)caravan_meth_inspect, METH_O, "Inspect internal C/GL state"},
-    {"clear", (PyCFunction)(void (*)(void))caravan_meth_clear, METH_FASTCALL | METH_KEYWORDS,
-     "Clear buffers (e.g. COLOR_BUFFER_BIT)"},
-    {"clear_color", (PyCFunction)(void (*)(void))caravan_meth_clear_color,
-     METH_FASTCALL | METH_KEYWORDS, "Set clear color"},
-    {"bind_default_framebuffer", (PyCFunction)caravan_bind_default_framebuffer, METH_NOARGS,
-     "Bind the main window screen."},
-    {"viewport", (PyCFunction)(void (*)(void))caravan_viewport, METH_FASTCALL | METH_KEYWORDS,
-     "Set the drawing region"},
-
-    {}};
 
 // -----------------------------------------------------------------------------
 // Module Lifecycle
@@ -534,22 +532,43 @@ PyCaravanGL_Status caravan_clear(PyObject *module) {
                                     nullptr);
 }
 
-static const PyModuleDef_Slot caravan_slots[] = {
-    {Py_mod_exec, caravan_exec},
-    {Py_mod_multiple_interpreters, Py_MOD_PER_INTERPRETER_GIL_SUPPORTED},
-#ifdef Py_mod_gil
-    {Py_mod_gil, Py_MOD_GIL_NOT_USED},
-#endif
-    {}};
-
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 static PyModuleDef caravan_module = {
     PyModuleDef_HEAD_INIT,
     .m_name = "caravangl",
     .m_doc = "CaravanGL: Modern Isolated OpenGL Context",
     .m_size = sizeof(CaravanState),
-    .m_methods = (PyMethodDef *)caravan_methods,
-    .m_slots = (PyModuleDef_Slot *)caravan_slots,
+    .m_methods =
+        (PyMethodDef[]){
+
+            {"enable_debug", (PyCFunction)caravan_meth_enable_debug, METH_NOARGS,
+             "Enable GL Debug Output"},
+            {"context", CARAVAN_CAST(caravan_meth_context), METH_NOARGS, "Get capabilities"},
+            {"inspect", (PyCFunction)caravan_meth_inspect, METH_O, "Inspect internal C/GL state"},
+            {"clear", CARAVAN_CAST(caravan_meth_clear), METH_FASTCALL | METH_KEYWORDS,
+             "Clear buffers (e.g. COLOR_BUFFER_BIT)"},
+            {"clear_color", CARAVAN_CAST(caravan_meth_clear_color), METH_FASTCALL | METH_KEYWORDS,
+             "Set clear color"},
+            {"bind_default_framebuffer", (PyCFunction)caravan_bind_default_framebuffer, METH_NOARGS,
+             "Bind the main window screen."},
+            {"viewport", CARAVAN_CAST(caravan_viewport), METH_FASTCALL | METH_KEYWORDS,
+             "Set the drawing region"},
+            {"get_active_context", CARAVAN_CAST(caravan_get_active_context), METH_NOARGS,
+             "Get the active context."},
+            {}
+
+        },
+    .m_slots =
+        (PyModuleDef_Slot[]){
+
+            {Py_mod_exec, caravan_exec},
+            {Py_mod_multiple_interpreters, Py_MOD_PER_INTERPRETER_GIL_SUPPORTED},
+#ifdef Py_mod_gil
+            {Py_mod_gil, Py_MOD_GIL_NOT_USED},
+#endif
+            {}
+
+        },
     .m_traverse = caravan_traverse,
     .m_clear = caravan_clear,
     .m_free = nullptr,

@@ -105,21 +105,27 @@ PyCaravanGL_API VertexArray_bind_index_buffer(PyCaravanVertexArray *self, PyObje
     Py_RETURN_NONE;
 }
 
-static const PyMethodDef VertexArray_methods[] = {
-    {"bind_attribute", (PyCFunction)(void (*)(void))VertexArray_bind_attribute,
-     METH_FASTCALL | METH_KEYWORDS, "Map a VBO to a shader attribute"},
-    {"bind_index_buffer", (PyCFunction)(void (*)(void))VertexArray_bind_index_buffer, METH_O,
-     nullptr},
-    {}};
-
-static const PyType_Slot VertexArray_slots[] = {{Py_tp_init, VertexArray_init},
-                                                {Py_tp_dealloc, VertexArray_dealloc},
-                                                {Py_tp_methods, (PyMethodDef *)VertexArray_methods},
-                                                {}};
 // NOLINTNEXTLINE(misc-use-internal-linkage)
 const PyType_Spec VertexArray_spec = {
     .name = "caravangl.VertexArray",
     .basicsize = sizeof(PyCaravanVertexArray),
     .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
-    .slots = (PyType_Slot *)VertexArray_slots,
+    .slots =
+        (PyType_Slot[]){
+
+            {Py_tp_init, VertexArray_init},
+            {Py_tp_dealloc, VertexArray_dealloc},
+            {Py_tp_methods,
+             (PyMethodDef[]){
+
+                 {"bind_attribute", CARAVAN_CAST(VertexArray_bind_attribute),
+                  METH_FASTCALL | METH_KEYWORDS, "Map a VBO to a shader attribute"},
+                 {"bind_index_buffer", CARAVAN_CAST(VertexArray_bind_index_buffer), METH_O,
+                  nullptr},
+                 {}}
+
+            },
+            {}
+
+        },
 };

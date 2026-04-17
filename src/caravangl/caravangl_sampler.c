@@ -61,20 +61,27 @@ PyCaravanGL_Slot Sampler_dealloc(PyCaravanSampler *self) {
     Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
-static const PyMethodDef Sampler_methods[] = {{}};
-
-static const PyType_Slot Sampler_slots[] = {{Py_tp_new, (void *)PyType_GenericNew},
-                                            {Py_tp_init, Sampler_init},
-                                            {Py_tp_dealloc, Sampler_dealloc},
-                                            {Py_tp_traverse, Sampler_traverse},
-                                            {Py_tp_clear, Sampler_clear},
-                                            {Py_tp_methods, (PyMethodDef *)Sampler_methods},
-                                            {}};
-
 // NOLINTNEXTLINE(misc-use-internal-linkage)
 const PyType_Spec Sampler_spec = {
     .name = "caravangl.Sampler",
     .basicsize = sizeof(PyCaravanSampler),
     .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,
-    .slots = (PyType_Slot *)Sampler_slots,
+    .slots =
+        (PyType_Slot[]){
+
+            {Py_tp_new, PyType_GenericNew},
+            {Py_tp_init, Sampler_init},
+            {Py_tp_dealloc, Sampler_dealloc},
+            {Py_tp_traverse, Sampler_traverse},
+            {Py_tp_clear, Sampler_clear},
+            {Py_tp_methods,
+             (PyMethodDef[]){
+
+                 {}}
+
+            },
+
+            {}
+
+        },
 };

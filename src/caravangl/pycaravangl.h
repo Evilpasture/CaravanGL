@@ -8,6 +8,8 @@
 // NOLINTNEXTLINE
 #define IntToPtr(x) ((void *)(uintptr_t)(x))
 
+#define CARAVAN_CAST(x) (PyCFunction)(void (*)(void))(x)
+
 #define FOR_ALL_CARAVAN_TYPES(DO, state)                                                           \
     DO(state->BufferType)                                                                          \
     DO(state->PipelineType)                                                                        \

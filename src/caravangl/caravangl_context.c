@@ -192,27 +192,48 @@ PyCaravanGL_Slot Context_dealloc(PyCaravanContext *self) {
     Py_DECREF(type);
 }
 
-static int Context_traverse(PyCaravanContext *self, visitproc visit, void *arg) {
+PyCaravanGL_Status Context_traverse(PyCaravanContext *self, visitproc visit, void *arg) {
     Py_VISIT(self->os_make_current_cb);
     return 0;
 }
 
-static int Context_clear(PyCaravanContext *self) {
+PyCaravanGL_Status Context_clear(PyCaravanContext *self) {
     Py_CLEAR(self->os_make_current_cb);
     return 0;
 }
 
-static const PyMethodDef Context_methods[] = {
-    {"make_current", (PyCFunction)Context_make_current, METH_NOARGS, "Activate this context"}, {}};
+// Getter for the callback
+PyCaravanGL_API Context_get_callback(PyCaravanContext *self, [[maybe_unused]] void *closure) {
+    return Py_NewRef(self->os_make_current_cb);
+}
+
+// Setter for the callback
+PyCaravanGL_Status Context_set_callback(PyCaravanContext *self, PyObject *value, void *closure) {
+    if (value == nullptr) {
+        PyErr_SetString(PyExc_TypeError, "Cannot delete the os_make_current_cb attribute");
+        return -1;
+    }
+    PyObject *old = self->os_make_current_cb;
+    self->os_make_current_cb = Py_NewRef(value);
+    Py_XDECREF(old);
+    return 0; // Success
+}
 
 // NOLINTNEXTLINE(misc-use-internal-linkage)
 const PyType_Spec Context_spec = {
     .name = "caravangl.Context",
     .basicsize = sizeof(PyCaravanContext),
     .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,
-    .slots = (PyType_Slot[]){{Py_tp_init, Context_init},
-                             {Py_tp_dealloc, Context_dealloc},
-                             {Py_tp_methods, (PyMethodDef *)Context_methods},
-                             {Py_tp_traverse, Context_traverse},
-                             {Py_tp_clear, Context_clear},
-                             {}}};
+    .slots = (PyType_Slot[]){
+        {Py_tp_init, Context_init},
+        {Py_tp_dealloc, Context_dealloc},
+        {Py_tp_getset, (PyGetSetDef[]){{"os_make_current_cb", (getter)Context_get_callback,
+                                        (setter)Context_set_callback,
+                                        "Callback to make this context current in the OS", nullptr},
+                                       {}}},
+        {Py_tp_methods, (PyMethodDef[]){{"make_current", (PyCFunction)Context_make_current,
+                                         METH_NOARGS, "Activate this context"},
+                                        {}}},
+        {Py_tp_traverse, Context_traverse},
+        {Py_tp_clear, Context_clear},
+        {}}};

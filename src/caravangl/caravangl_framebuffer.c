@@ -16,12 +16,12 @@ PyCaravanGL_Status Framebuffer_init(PyCaravanFramebuffer *self, PyObject *args, 
     return 0;
 }
 
-static int Framebuffer_traverse(PyCaravanFramebuffer *self, visitproc visit, void *arg) {
+PyCaravanGL_Status Framebuffer_traverse(PyCaravanFramebuffer *self, visitproc visit, void *arg) {
     Py_VISIT(self->owning_context);
     return 0;
 }
 
-static int Framebuffer_clear(PyCaravanFramebuffer *self) {
+PyCaravanGL_Status Framebuffer_clear(PyCaravanFramebuffer *self) {
     Py_CLEAR(self->owning_context);
     return 0;
 }
@@ -136,23 +136,28 @@ PyCaravanGL_API Framebuffer_bind(PyCaravanFramebuffer *self, [[maybe_unused]] Py
     Py_RETURN_NONE;
 }
 
-static const PyMethodDef Framebuffer_methods[] = {
-    {"attach_texture", (PyCFunction)(void (*)(void))Framebuffer_attach_texture,
-     METH_FASTCALL | METH_KEYWORDS, "Attach a texture to the Framebuffer."},
-    {"check_status", (PyCFunction)Framebuffer_check_status, METH_NOARGS,
-     "Verify FBO completeness."},
-    {"bind", (PyCFunction)Framebuffer_bind, METH_NOARGS, "Bind as the active Framebuffer."},
-    {nullptr}};
-
-static const PyType_Slot Framebuffer_slots[] = {{Py_tp_new, (void *)PyType_GenericNew},
-                                                {Py_tp_init, Framebuffer_init},
-                                                {Py_tp_dealloc, Framebuffer_dealloc},
-                                                {Py_tp_methods, (PyMethodDef *)Framebuffer_methods},
-                                                {0, nullptr}};
-
+// NOLINTNEXTLINE(misc-use-internal-linkage)
 const PyType_Spec Framebuffer_spec = {
     .name = "caravangl.Framebuffer",
     .basicsize = sizeof(PyCaravanFramebuffer),
     .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
-    .slots = (PyType_Slot *)Framebuffer_slots,
+    .slots =
+        (PyType_Slot[]){
+
+            {Py_tp_new, PyType_GenericNew},
+            {Py_tp_init, Framebuffer_init},
+            {Py_tp_dealloc, Framebuffer_dealloc},
+            {Py_tp_methods,
+             (PyMethodDef[]){
+
+                 {"attach_texture", CARAVAN_CAST(Framebuffer_attach_texture),
+                  METH_FASTCALL | METH_KEYWORDS, "Attach a texture to the Framebuffer."},
+                 {"check_status", (PyCFunction)Framebuffer_check_status, METH_NOARGS,
+                  "Verify FBO completeness."},
+                 {"bind", (PyCFunction)Framebuffer_bind, METH_NOARGS,
+                  "Bind as the active Framebuffer."},
+                 {}}
+
+            },
+            {}},
 };

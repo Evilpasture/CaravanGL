@@ -168,25 +168,33 @@ PyCaravanGL_API Texture_generate_mipmap(PyCaravanTexture *self, [[maybe_unused]]
     Py_RETURN_NONE;
 }
 
-static const PyMethodDef Texture_methods[] = {
-    {"upload", (PyCFunction)(void (*)(void))Texture_upload, METH_FASTCALL | METH_KEYWORDS,
-     "Upload data to GPU"},
-    {"bind", (PyCFunction)(void (*)(void))Texture_bind, METH_FASTCALL | METH_KEYWORDS,
-     "Bind texture to unit"},
-    {"generate_mipmap", (PyCFunction)Texture_generate_mipmap, METH_NOARGS, "Generate mipmaps"},
-    {nullptr}};
-
-static const PyType_Slot Texture_slots[] = {{Py_tp_init, Texture_init},
-                                            {Py_tp_dealloc, Texture_dealloc},
-                                            {Py_tp_traverse, Texture_traverse},
-                                            {Py_tp_clear, Texture_clear},
-                                            {Py_tp_methods, (PyMethodDef *)Texture_methods},
-                                            {0, nullptr}};
-
 // NOLINTNEXTLINE(misc-use-internal-linkage)
 const PyType_Spec Texture_spec = {
     .name = "caravangl.Texture",
     .basicsize = sizeof(PyCaravanTexture),
     .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,
-    .slots = (PyType_Slot *)Texture_slots,
+    .slots =
+        (PyType_Slot[]){
+
+            {Py_tp_init, Texture_init},
+            {Py_tp_dealloc, Texture_dealloc},
+            {Py_tp_traverse, Texture_traverse},
+            {Py_tp_clear, Texture_clear},
+            {Py_tp_methods,
+             (PyMethodDef[]){
+
+                 {"upload", CARAVAN_CAST(Texture_upload), METH_FASTCALL | METH_KEYWORDS,
+                  "Upload data to GPU"},
+                 {"bind", CARAVAN_CAST(Texture_bind), METH_FASTCALL | METH_KEYWORDS,
+                  "Bind texture to unit"},
+                 {"generate_mipmap", (PyCFunction)Texture_generate_mipmap, METH_NOARGS,
+                  "Generate mipmaps"},
+                 {}
+
+             }
+
+            },
+            {}
+
+        },
 };
