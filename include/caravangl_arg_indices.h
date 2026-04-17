@@ -57,7 +57,8 @@
     X(IDX_VAO_ATTR_TYPE, "type", uint32_t, 1)                                                      \
     X(IDX_VAO_ATTR_NORM, "normalized", int, 0)                                                     \
     X(IDX_VAO_ATTR_STRIDE, "stride", int, 0)                                                       \
-    X(IDX_VAO_ATTR_OFFSET, "offset", int, 0)
+    X(IDX_VAO_ATTR_OFFSET, "offset", int, 0)                                                       \
+    X(IDX_VAO_ATTR_DIV, "divisor", uint32_t, 0)
 
 #define SCHEMA_PL_UNIFORMS(X) X(IDX_PL_U_BATCH, "batch", PyObject *, 1)
 
@@ -83,7 +84,9 @@
     X(IDX_TEX_UPL_LEVEL, "level", int, 0)                                                          \
     X(IDX_TEX_UPL_D, "depth", int, 0)
 
-#define SCHEMA_TEX_BIND(X) X(IDX_TEX_BIND_UNIT, "unit", uint32_t, 1)
+#define SCHEMA_TEX_BIND(X)                                                                         \
+    X(IDX_TEX_BIND_UNIT, "unit", uint32_t, 1)                                                      \
+    X(IDX_TEX_BIND_SAMP, "sampler", PyObject *, 0)
 
 #define SCHEMA_FBO_ATTACH(X)                                                                       \
     X(IDX_FBO_ATT_ATTACH, "attachment", uint32_t, 1)                                               \
@@ -103,6 +106,12 @@
     X(IDX_VP_Y, "y", int, 1)                                                                       \
     X(IDX_VP_W, "w", int, 1)                                                                       \
     X(IDX_VP_H, "h", int, 1)
+
+#define SCHEMA_SAMPLER_INIT(X)                                                                     \
+    X(IDX_SAMP_MIN, "min_filter", uint32_t, 0)                                                     \
+    X(IDX_SAMP_MAG, "mag_filter", uint32_t, 0)                                                     \
+    X(IDX_SAMP_WRAP_S, "wrap_s", uint32_t, 0)                                                      \
+    X(IDX_SAMP_WRAP_T, "wrap_t", uint32_t, 0)
 
 /** --- THE GENERATOR ENGINE --- **/
 
@@ -130,6 +139,7 @@ DEFINE_INDEX_GROUP(FboAttach, SCHEMA_FBO_ATTACH)
 DEFINE_INDEX_GROUP(Clear, SCHEMA_CLEAR)
 DEFINE_INDEX_GROUP(ClearColor, SCHEMA_CLEAR_COLOR)
 DEFINE_INDEX_GROUP(Viewport, SCHEMA_VIEWPORT)
+DEFINE_INDEX_GROUP(SamplerInit, SCHEMA_SAMPLER_INIT)
 
 // Master list of all parsers
 #define FOR_ALL_PARSERS(X)                                                                         \
@@ -149,7 +159,8 @@ DEFINE_INDEX_GROUP(Viewport, SCHEMA_VIEWPORT)
     X(FboAttach, FboAttach, SCHEMA_FBO_ATTACH)                                                     \
     X(Clear, Clear, SCHEMA_CLEAR)                                                                  \
     X(ClearColor, ClearColor, SCHEMA_CLEAR_COLOR)                                                  \
-    X(Viewport, Viewport, SCHEMA_VIEWPORT)
+    X(Viewport, Viewport, SCHEMA_VIEWPORT)                                                         \
+    X(SamplerInit, SamplerInit, SCHEMA_SAMPLER_INIT)
 
 // Define specialized mappers to split the declarations
 #define MAP_ONLY_PARSER(Name, ...) FastParser Name##Parser;

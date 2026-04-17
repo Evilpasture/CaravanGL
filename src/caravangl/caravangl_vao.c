@@ -35,12 +35,13 @@ PyCaravanGL_API VertexArray_bind_attribute(PyCaravanVertexArray *self, PyObject 
     int stride = 0;
     uintptr_t offset = 0;
     PyObject *py_buffer = nullptr;
+    uint32_t divisor = 0; // Default to 0 (per-vertex)
 
     void *targets[VaoAttr_COUNT] = {
         [IDX_VAO_ATTR_LOC] = &location,    [IDX_VAO_ATTR_BUF] = (void *)&py_buffer,
         [IDX_VAO_ATTR_SIZE] = &size,       [IDX_VAO_ATTR_TYPE] = &type,
         [IDX_VAO_ATTR_NORM] = &normalized, [IDX_VAO_ATTR_STRIDE] = &stride,
-        [IDX_VAO_ATTR_OFFSET] = &offset};
+        [IDX_VAO_ATTR_OFFSET] = &offset,   [IDX_VAO_ATTR_DIV] = &divisor};
 
     if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.VaoAttrParser, targets)) {
         return nullptr;
@@ -60,6 +61,9 @@ PyCaravanGL_API VertexArray_bind_attribute(PyCaravanVertexArray *self, PyObject 
         OpenGL->EnableVertexAttribArray(location);
         OpenGL->VertexAttribPointer(location, size, type, normalized ? GL_TRUE : GL_FALSE, stride,
                                     IntToPtr(offset));
+
+        // Tells GL how many instances to draw before moving to the next element in this buffer
+        OpenGL->VertexAttribDivisor(location, divisor);
 
         // Unbind VAO to prevent accidental corruption
         OpenGL->BindVertexArray(0);

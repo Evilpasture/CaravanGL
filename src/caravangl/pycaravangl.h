@@ -120,3 +120,7 @@ typedef struct {
 typedef struct {
     PyObject_HEAD CaravanFramebuffer fbo;
 } PyCaravanFramebuffer;
+
+typedef struct {
+    PyObject_HEAD GLuint id;
+} PyCaravanSampler;

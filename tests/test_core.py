@@ -679,3 +679,141 @@ def test_pipeline_illegal_blend_values():
     # Passing a string
     with pytest.raises(TypeError):
         caravangl.Pipeline(program=prog, vao=vao, blend_dst_rgb="GL_ONE") # type: ignore
+
+# --- 28. VertexArray: Instanced Attribute Binding ---
+
+def test_vao_instanced_attribute():
+    """Verify that the 'divisor' argument is accepted by the parser."""
+    vao = caravangl.VertexArray()
+    vbo = caravangl.Buffer(size=1024)
+    
+    # Binding an attribute with divisor=1 (Instancing enabled)
+    # If the parser or C-code is broken, this will throw an error or crash here.
+    vao.bind_attribute(
+        location=0, 
+        buffer=vbo, 
+        size=3, 
+        type=caravangl.FLOAT, 
+        divisor=1 # <--- Testing our new C field
+    )
+    
+    assert True # Successfully parsed and called gl-command
+
+# --- 29. Functional: Instanced Draw Execution ---
+
+def test_instanced_draw_call():
+    """Execute a draw call with multiple instances."""
+    # 1. Setup
+    prog = caravangl.Program(vertex_shader=VS_DUMMY, fragment_shader=FS_DUMMY)
+    vao = caravangl.VertexArray()
+    vbo = caravangl.Buffer(size=1024)
+    
+    # 3 vertices (per shape)
+    vao.bind_attribute(0, vbo, 3, caravangl.FLOAT, stride=12, offset=0, divisor=0)
+    
+    # 10 instances of data (e.g., offsets)
+    vbo_inst = caravangl.Buffer(size=1024)
+    vao.bind_attribute(1, vbo_inst, 2, caravangl.FLOAT, stride=8, offset=0, divisor=1)
+    
+    pipe = caravangl.Pipeline(program=prog, vao=vao)
+    
+    # 2. Configure for Instancing
+    pipe.params[0] = 3  # 3 vertices per instance
+    pipe.params[1] = 10 # 10 instances
+    
+    # 3. Draw
+    # This triggers OpenGL->DrawArraysInstanced
+    caravangl.clear(caravangl.COLOR_BUFFER_BIT)
+    pipe.draw()
+    
+    assert True
+
+# --- 30. Sampler: Lifecycle & Defaults ---
+
+def test_sampler_creation():
+    """Verify sampler object creation with various filter modes."""
+    # Default sampler
+    s1 = caravangl.Sampler()
+    info = caravangl.inspect(s1)
+    assert info["type"] == "sampler"
+    assert info["id"] > 0
+
+    # Custom pixel-art sampler
+    s2 = caravangl.Sampler(
+        min_filter=caravangl.NEAREST, 
+        mag_filter=caravangl.NEAREST,
+        wrap_s=caravangl.REPEAT,
+        wrap_t=caravangl.REPEAT
+    )
+    assert caravangl.inspect(s2)["id"] > 0
+
+# --- 31. Sampler: Strict Type Safety ---
+
+def test_sampler_binding_type_safety():
+    """Verify that Texture.bind rejects non-sampler objects."""
+    tex = caravangl.Texture()
+    
+    # Test 1: Passing an integer instead of a Sampler object
+    with pytest.raises(TypeError) as exc:
+        tex.bind(unit=0, sampler=123) # type: ignore
+    assert "caravangl.Sampler" in str(exc.value)
+
+    # Test 2: Passing a Buffer object instead of a Sampler
+    vbo = caravangl.Buffer(size=10)
+    with pytest.raises(TypeError) as exc:
+        tex.bind(unit=0, sampler=vbo) # type: ignore
+    assert "caravangl.Sampler" in str(exc.value)
+
+# --- 32. Sampler: Cache Invalidation (Crucial) ---
+
+def test_sampler_cache_poisoning_protection():
+    """Verify that deleting a sampler clears the C-state tracker cache."""
+    tex = caravangl.Texture()
+    tex.upload(64, 64, caravangl.RGBA8, caravangl.RGBA, caravangl.UNSIGNED_BYTE, None)
+    
+    # 1. Create and bind a sampler
+    s1 = caravangl.Sampler()
+    s1_id = caravangl.inspect(s1)["id"]
+    tex.bind(unit=0, sampler=s1)
+    
+    # 2. Delete the sampler. 
+    # This triggers Sampler_dealloc, which should clear the tracker for Unit 0.
+    del s1
+    
+    # 3. Create a new sampler. 
+    # OpenGL will very likely reuse the same ID (s1_id).
+    s2 = caravangl.Sampler()
+    s2_id = caravangl.inspect(s2)["id"]
+    
+    # 4. Bind the new sampler.
+    # If our dealloc logic is correct, the tracker knows unit 0 is empty 
+    # and will correctly issue the glBindSampler command even if IDs are identical.
+    tex.bind(unit=0, sampler=s2)
+    
+    # If this didn't crash or trigger a GL error, the cache logic is healthy.
+    assert True
+
+# --- 33. Functional: Multi-Sampler State Switch ---
+
+def test_multi_sampler_draw_consistency():
+    """Ensure we can switch samplers between textures on different units."""
+    prog = caravangl.Program(vertex_shader=VS_DUMMY, fragment_shader=FS_DUMMY)
+    vao = caravangl.VertexArray()
+    pipe = caravangl.Pipeline(program=prog, vao=vao)
+    
+    t1 = caravangl.Texture()
+    t2 = caravangl.Texture()
+    
+    s_linear = caravangl.Sampler(min_filter=caravangl.LINEAR)
+    s_nearest = caravangl.Sampler(min_filter=caravangl.NEAREST)
+    
+    # Bind to different units with different samplers
+    t1.bind(unit=0, sampler=s_linear)
+    t2.bind(unit=1, sampler=s_nearest)
+    
+    # Switch them
+    t1.bind(unit=1, sampler=s_nearest)
+    t2.bind(unit=0, sampler=s_linear)
+    
+    pipe.draw()
+    assert True

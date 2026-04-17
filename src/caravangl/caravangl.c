@@ -228,6 +228,10 @@ PyCaravanGL_API caravan_meth_inspect(PyObject *mod, PyObject *arg) {
         return FastBuild_Dict("type", "vertex_array", "id",
                               (Py_ssize_t)((PyCaravanVertexArray *)arg)->id);
     }
+    if (typ == state->SamplerType) {
+        auto sampler = (PyCaravanSampler *)arg;
+        return FastBuild_Dict("type", "sampler", "id", (Py_ssize_t)sampler->id);
+    }
 
     Py_RETURN_NONE;
 }
@@ -378,6 +382,7 @@ static int init_types(PyObject *mod, CaravanState *state) {
         {&UniformBatch_spec, (PyObject **)&state->UniformBatchType, "UniformBatch"},
         {&Texture_spec, (PyObject **)&state->TextureType, "Texture"},
         {&Framebuffer_spec, (PyObject **)&state->FramebufferType, "Framebuffer"},
+        {&Sampler_spec, (PyObject **)&state->SamplerType, "Sampler"},
     };
 
     auto mod_name = PyUnicode_FromString("caravangl");
@@ -496,6 +501,11 @@ static int init_constants(PyObject *mod) {
                   {"ONE", GL_ONE},
                   {"ZERO", GL_ZERO},
                   {"FUNC_ADD", GL_FUNC_ADD},
+
+                  {"NEAREST", GL_NEAREST},
+                  {"LINEAR", GL_LINEAR},
+                  {"CLAMP_TO_EDGE", GL_CLAMP_TO_EDGE},
+                  {"REPEAT", GL_REPEAT},
 
                   // --- Build Metadata ---
                   {"FREE_THREADED",

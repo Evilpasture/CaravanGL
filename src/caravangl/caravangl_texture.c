@@ -127,15 +127,35 @@ PyCaravanGL_API Texture_bind(PyCaravanTexture *self, PyObject *const *args, Py_s
                              PyObject *kwnames) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
     auto state = get_caravan_state(mod);
+
     uint32_t unit = 0;
-    void *targets[TexBind_COUNT] = {[IDX_TEX_BIND_UNIT] = &unit};
+    PyObject *py_sampler = nullptr;
+
+    void *targets[TexBind_COUNT] = {[IDX_TEX_BIND_UNIT] = &unit,
+                                    [IDX_TEX_BIND_SAMP] = (void *)&py_sampler};
 
     if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.TexBindParser, targets)) {
         return nullptr;
     }
+
+    GLuint sampler_id = 0;
+
+    if (py_sampler != nullptr && py_sampler != Py_None) {
+        // --- STRICT TYPE CHECK ---
+        // 1. Fast path: check if the type pointer matches exactly
+        if (!Py_IS_TYPE(py_sampler, state->SamplerType)) {
+            // 2. Slow path: check if it's a subclass (standard Python behavior)
+            if (!PyObject_TypeCheck(py_sampler, state->SamplerType)) {
+                PyErr_Format(PyExc_TypeError, "sampler must be a caravangl.Sampler, not %.200s",
+                             Py_TYPE(py_sampler)->tp_name);
+                return nullptr;
+            }
+        }
+        sampler_id = ((PyCaravanSampler *)py_sampler)->id;
+    }
+
     WithCaravanGL(mod, OpenGL) {
-        // TODO(Evilpasture): Assuming Sampler Object is 0 for now until Sampler objects are added
-        cv_bind_texture(state, unit, &self->tex, 0);
+        cv_bind_texture(state, unit, &self->tex, sampler_id);
     }
     Py_RETURN_NONE;
 }
