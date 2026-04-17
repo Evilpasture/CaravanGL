@@ -98,16 +98,21 @@ DEBUG_BUILD: int
 
 # --- Module Level Functions ---
 
-def init(loader: object) -> None: ...
 def enable_debug() -> None: ...
 def context() -> dict[str, Any]: ...
-def inspect(obj: object) -> dict[str, Any]: ...
+def inspect(obj: object) -> dict[str, Any] | None: ...
 def clear(mask: int) -> None: ...
 def clear_color(r: float, g: float, b: float, a: float) -> None: ...
 def viewport(x: int, y: int, width: int, height: int) -> None: ...
 def bind_default_framebuffer() -> None: ...
+def get_active_context() -> "Context | None": ...
 
 # --- Classes ---
+
+class Context:
+    os_make_current_cb: Any
+    def __init__(self, loader: Any, callback: Any = None) -> None: ...
+    def make_current(self) -> None: ...
 
 class Buffer:
     def __init__(self, size: int, data: _BufferProtocol | None = None, target: int = ..., usage: int = ...) -> None: ...
@@ -183,12 +188,12 @@ class Framebuffer:
     def bind(self) -> None: ...
 
 __all__ = [
-    "Buffer", "Sampler", "Texture", "Program", "VertexArray", "UniformBatch", "Pipeline", "Framebuffer",
-    "init", "enable_debug", "context", "inspect", "clear", "clear_color", "viewport", 
-    "bind_default_framebuffer",
+    "Context", "Buffer", "Sampler", "Texture", "Program", "VertexArray", "UniformBatch", "Pipeline", "Framebuffer",
+    "enable_debug", "context", "inspect", "clear", "clear_color", "viewport", 
+    "bind_default_framebuffer", "get_active_context",
     "FLOAT", "UNSIGNED_BYTE", "UNSIGNED_SHORT", "UNSIGNED_INT", "UNSIGNED_INT_24_8",
     "TRIANGLES", "LINES", "POINTS",
-    "UF_1I", "UF_3I", "UF_1F", "UF_2F", "UF_3F", "UF_4F", "UF_MAT4",
+    "UF_1I", "UF_3I", "UF_1F", "UF_2F", "UF_3F", "UF_4F", "UF_MAT4", "UF_MAT4_RM",
     "ARRAY_BUFFER", "ELEMENT_ARRAY_BUFFER", "UNIFORM_BUFFER", "STATIC_DRAW", "DYNAMIC_DRAW", "STREAM_DRAW",
     "TEXTURE_2D", "TEXTURE_3D", "RGBA", "RGB", "RGBA8", 
     "DEPTH_COMPONENT", "DEPTH_COMPONENT24", "DEPTH24_STENCIL8", "DEPTH_STENCIL",
@@ -199,5 +204,6 @@ __all__ = [
     "FRONT", "BACK", "FRONT_AND_BACK",
     "SRC_ALPHA", "ONE_MINUS_SRC_ALPHA", "ONE", "FUNC_ADD",
     "NEAREST", "LINEAR", "REPEAT", "CLAMP_TO_EDGE",
+    "CW", "CCW",
     "FREE_THREADED", "DEBUG_BUILD"
 ]
