@@ -151,16 +151,34 @@ static inline PyObject *inspect_buffer(PyCaravanBuffer *buf) {
 }
 
 static inline PyObject *inspect_pipeline(PyCaravanPipeline *pip) {
-    auto state_dict = FastBuild_Dict("depth_test", pip->render_state.depth_test_enabled,
-                                     "depth_write", pip->render_state.depth_write_mask,
-                                     "depth_func", (Py_ssize_t)pip->render_state.depth_func,
-                                     "blend", pip->render_state.blend_enabled);
+    // 1. Snapshot of the Render State Machine
+    auto state_dict = FastBuild_Dict(
+        // -- Depth --
+        "depth_test", pip->render_state.depth_test_enabled, "depth_write",
+        pip->render_state.depth_write_mask, "depth_func", (Py_ssize_t)pip->render_state.depth_func,
 
+        // -- Stencil --
+        "stencil_test", pip->render_state.stencil_test_enabled, "stencil_func",
+        (Py_ssize_t)pip->render_state.stencil_func, "stencil_ref",
+        (Py_ssize_t)pip->render_state.stencil_ref, "stencil_zpass",
+        (Py_ssize_t)pip->render_state.stencil_zpass_op,
+
+        // -- Blending --
+        "blend", pip->render_state.blend_enabled, "blend_src_rgb",
+        (Py_ssize_t)pip->render_state.blend_src_rgb, "blend_dst_rgb",
+        (Py_ssize_t)pip->render_state.blend_dst_rgb,
+
+        // -- Culling --
+        "cull", pip->render_state.cull_face_enabled, "cull_mode",
+        (Py_ssize_t)pip->render_state.cull_face_mode);
+
+    // 2. Snapshot of the Draw Call Parameters
     auto params_dict = FastBuild_Dict("vertex_count", (Py_ssize_t)pip->params.vertex_count,
                                       "instance_count", (Py_ssize_t)pip->params.instance_count,
                                       "first_vertex", (Py_ssize_t)pip->params.first_vertex,
                                       "base_instance", (Py_ssize_t)pip->params.base_instance);
 
+    // 3. Main Pipeline Object
     return FastBuild_Dict("type", "pipeline", "program", (Py_ssize_t)pip->program, "vao",
                           (Py_ssize_t)pip->vao, "topology", (Py_ssize_t)pip->topology, "index_type",
                           (Py_ssize_t)pip->index_type, "render_state", state_dict, "draw_params",
@@ -401,16 +419,55 @@ static int init_constants(PyObject *mod) {
         long value;
     } consts[] = {{"FLOAT", GL_FLOAT},
                   {"TRIANGLES", GL_TRIANGLES},
+                  {"LINES", GL_LINES},
+                  {"POINTS", GL_POINTS},
+
+                  // --- Uniform Batch Helpers ---
                   {"UF_1I", UF_1I},
                   {"UF_1F", UF_1F},
                   {"UF_2F", UF_2F},
                   {"UF_3F", UF_3F},
                   {"UF_4F", UF_4F},
                   {"UF_MAT4", UF_MAT4},
-                  {"ELEMENT_ARRAY_BUFFER", GL_ELEMENT_ARRAY_BUFFER},
+                  {"UF_3I", UF_3I}, // Added for consistency
+
+                  // --- Data Types ---
                   {"UNSIGNED_SHORT", GL_UNSIGNED_SHORT},
                   {"UNSIGNED_INT", GL_UNSIGNED_INT},
                   {"UNSIGNED_BYTE", GL_UNSIGNED_BYTE},
+
+                  // --- Buffer Targets & Usage ---
+                  {"ELEMENT_ARRAY_BUFFER", GL_ELEMENT_ARRAY_BUFFER},
+                  {"ARRAY_BUFFER", GL_ARRAY_BUFFER},
+                  {"UNIFORM_BUFFER", GL_UNIFORM_BUFFER},
+                  {"STATIC_DRAW", GL_STATIC_DRAW},
+                  {"DYNAMIC_DRAW", GL_DYNAMIC_DRAW},
+                  {"STREAM_DRAW", GL_STREAM_DRAW},
+
+                  // --- Depth & Stencil Compare Functions ---
+                  {"NEVER", GL_NEVER},
+                  {"LESS", GL_LESS},
+                  {"EQUAL", GL_EQUAL},
+                  {"LEQUAL", GL_LEQUAL},
+                  {"GREATER", GL_GREATER},
+                  {"NOTEQUAL", GL_NOTEQUAL},
+                  {"GEQUAL", GL_GEQUAL},
+                  {"ALWAYS", GL_ALWAYS},
+
+                  // --- Stencil Operations ---
+                  {"KEEP", GL_KEEP},
+                  {"ZERO", GL_ZERO},
+                  {"REPLACE", GL_REPLACE},
+                  {"INCR", GL_INCR},
+                  {"INCR_WRAP", GL_INCR_WRAP},
+                  {"DECR", GL_DECR},
+                  {"DECR_WRAP", GL_DECR_WRAP},
+                  {"INVERT", GL_INVERT},
+
+                  // --- Culling ---
+                  {"FRONT", GL_FRONT},
+                  {"BACK", GL_BACK},
+                  {"FRONT_AND_BACK", GL_FRONT_AND_BACK},
 
                   // --- Texture Constants ---
                   {"TEXTURE_2D", GL_TEXTURE_2D},
@@ -428,8 +485,19 @@ static int init_constants(PyObject *mod) {
                   {"DEPTH_STENCIL_ATTACHMENT", GL_DEPTH_STENCIL_ATTACHMENT},
                   {"COLOR_BUFFER_BIT", GL_COLOR_BUFFER_BIT},
                   {"DEPTH_BUFFER_BIT", GL_DEPTH_BUFFER_BIT},
+                  {"STENCIL_BUFFER_BIT", GL_STENCIL_BUFFER_BIT},
 
-                  // Build Metadata
+                  {"DEPTH24_STENCIL8", GL_DEPTH24_STENCIL8},
+                  {"DEPTH_STENCIL", GL_DEPTH_STENCIL},
+                  {"UNSIGNED_INT_24_8", GL_UNSIGNED_INT_24_8},
+
+                  {"SRC_ALPHA", GL_SRC_ALPHA},
+                  {"ONE_MINUS_SRC_ALPHA", GL_ONE_MINUS_SRC_ALPHA},
+                  {"ONE", GL_ONE},
+                  {"ZERO", GL_ZERO},
+                  {"FUNC_ADD", GL_FUNC_ADD},
+
+                  // --- Build Metadata ---
                   {"FREE_THREADED",
 #if defined(Py_GIL_DISABLED) && Py_GIL_DISABLED
                    1
@@ -444,7 +512,7 @@ static int init_constants(PyObject *mod) {
                    0
 #endif
                   }};
-#pragma unroll
+#pragma unroll 2
     for (size_t i = 0; i < sizeof(consts) / sizeof(consts[0]); i++) {
         if (PyModule_AddIntConstant(mod, consts[i].name, consts[i].value) < 0) {
             return -1;

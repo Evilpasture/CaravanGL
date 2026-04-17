@@ -16,15 +16,52 @@ PyCaravanGL_Status Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObje
     int depth_write = 1;
     uint32_t depth_func = GL_LESS;
     int blend_enabled = 0;
-    int cull_enabled = 0; // <--- FIX: Added missing variable
+    int cull_enabled = 0;
 
-    void *targets[PipelineInit_COUNT] = {
-        [IDX_PL_PROGRAM] = (void *)&py_program, [IDX_PL_VAO] = (void *)&py_vao,
-        [IDX_PL_TOPO] = (void *)(&topology),    [IDX_PL_IDX_TYP] = (void *)(&index_type),
-        [IDX_PL_DEPTH] = (void *)(&depth_test), [IDX_PL_DWRITE] = (void *)(&depth_write),
-        [IDX_PL_DFUNC] = (void *)(&depth_func), [IDX_PL_BLEND] = (void *)&blend_enabled,
-        [IDX_PL_CULL] = (void *)&cull_enabled // <--- FIX: Added missing array mapping
-    };
+    // Stencil Defaults
+    int stencil_test = 0;
+    uint32_t stencil_func = GL_ALWAYS;
+    int stencil_ref = 0;
+    uint32_t stencil_read_mask = 0xFFFFFFFF;
+    uint32_t stencil_write_mask = 0xFFFFFFFF;
+    uint32_t stencil_fail = GL_KEEP;
+    uint32_t stencil_zfail = GL_KEEP;
+    uint32_t stencil_zpass = GL_KEEP;
+
+    int cull = 0;
+    uint32_t cull_mode = GL_BACK;
+    int blend = 0;
+    uint32_t b_src_rgb = GL_SRC_ALPHA;
+    uint32_t b_dst_rgb = GL_ONE_MINUS_SRC_ALPHA;
+    uint32_t b_src_a = GL_ONE;
+    uint32_t b_dst_a = GL_ZERO;
+    uint32_t b_eq_rgb = GL_FUNC_ADD;
+    uint32_t b_eq_a = GL_FUNC_ADD;
+
+    void *targets[PipelineInit_COUNT] = {[IDX_PL_PROGRAM] = (void *)&py_program,
+                                         [IDX_PL_VAO] = (void *)&py_vao,
+                                         [IDX_PL_TOPO] = (void *)&topology,
+                                         [IDX_PL_IDX_TYP] = (void *)&index_type,
+                                         [IDX_PL_DEPTH] = (void *)&depth_test,
+                                         [IDX_PL_DWRITE] = (void *)&depth_write,
+                                         [IDX_PL_DFUNC] = (void *)&depth_func,
+                                         [IDX_PL_CULL] = (void *)&cull,
+                                         [IDX_PL_CULL_MODE] = (void *)&cull_mode,
+                                         [IDX_PL_STENCIL] = (void *)&stencil_test,
+                                         [IDX_PL_SFUNC] = (void *)&stencil_func,
+                                         [IDX_PL_SREF] = (void *)&stencil_ref,
+                                         [IDX_PL_SRMASK] = (void *)&stencil_read_mask,
+                                         [IDX_PL_SWMASK] = (void *)&stencil_write_mask,
+                                         [IDX_PL_SFAIL] = (void *)&stencil_fail,
+                                         [IDX_PL_SZFAIL] = (void *)&stencil_zfail,
+                                         [IDX_PL_SZPASS] = (void *)&stencil_zpass,
+                                         [IDX_PL_BLEND] = (void *)&blend,
+                                         [IDX_PL_B_SRC_RGB] = (void *)&b_src_rgb,
+                                         [IDX_PL_B_DST_RGB] = (void *)&b_dst_rgb,
+                                         [IDX_PL_B_SRC_A] = (void *)&b_src_a,
+                                         [IDX_PL_B_DST_A] = (void *)&b_dst_a,
+                                         [IDX_PL_B_EQ_RGB] = (void *)&b_eq_rgb,
+                                         [IDX_PL_B_EQ_A] = (void *)&b_eq_a};
 
     if (!FastParse_Unified(args, kwds, nullptr, &state->parsers.PipelineInitParser, targets)) {
         return -1;
@@ -37,27 +74,49 @@ PyCaravanGL_Status Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObje
     }
 
     WithCaravanGL(module, OpenGL) {
-        // SAFE: Overwrites existing references if __init__ is called twice
-        // to prevent Python object memory leaks
+        // 1. Manage Python Object References
+        // Using Py_XSETREF is correct because tp_alloc zero-initializes members to NULL.
         Py_XSETREF(self->program_ref, Py_NewRef(py_program));
         Py_XSETREF(self->vao_ref, Py_NewRef(py_vao));
 
-        // EXTRACT raw IDs internally
+        // 2. Extract raw IDs for the C-path
         self->program = ((PyCaravanProgram *)py_program)->id;
         self->vao = ((PyCaravanVertexArray *)py_vao)->id;
         self->topology = topology;
         self->index_type = index_type;
 
-        // 2. Pack the Render State
-        self->render_state.depth_test_enabled = (bool)depth_test;
-        self->render_state.depth_write_mask = (bool)depth_write;
-        self->render_state.depth_func = depth_func;
-        self->render_state.blend_enabled = (bool)blend_enabled;
-        self->render_state.cull_face_enabled = (bool)cull_enabled;
-
         // 3. Initialize default draw params
         self->params = (CaravanDrawParams){
             .vertex_count = 0, .instance_count = 1, .first_vertex = 0, .base_instance = 0};
+
+        // 4. Pack the Render State
+        // --- Depth ---
+        self->render_state.depth_test_enabled = (bool)depth_test;
+        self->render_state.depth_write_mask = (bool)depth_write;
+        self->render_state.depth_func = depth_func;
+
+        // --- Stencil ---
+        self->render_state.stencil_test_enabled = (bool)stencil_test;
+        self->render_state.stencil_func = stencil_func;
+        self->render_state.stencil_ref = stencil_ref;
+        self->render_state.stencil_read_mask = stencil_read_mask;
+        self->render_state.stencil_write_mask = stencil_write_mask;
+        self->render_state.stencil_fail_op = stencil_fail;
+        self->render_state.stencil_zfail_op = stencil_zfail;
+        self->render_state.stencil_zpass_op = stencil_zpass;
+
+        // --- Culling ---
+        self->render_state.cull_face_enabled = (bool)cull; // Use the name from 'targets'
+        self->render_state.cull_face_mode = cull_mode;
+
+        // --- Blending ---
+        self->render_state.blend_enabled = (bool)blend; // Use the name from 'targets'
+        self->render_state.blend_src_rgb = b_src_rgb;
+        self->render_state.blend_dst_rgb = b_dst_rgb;
+        self->render_state.blend_src_alpha = b_src_a;
+        self->render_state.blend_dst_alpha = b_dst_a;
+        self->render_state.blend_eq_rgb = b_eq_rgb;
+        self->render_state.blend_eq_alpha = b_eq_a;
     }
 
     // SAFE: Only track the object if the Python VM hasn't already tracked it
@@ -108,9 +167,8 @@ PyCaravanGL_API Pipeline_draw(PyCaravanPipeline *self, [[maybe_unused]] PyObject
         cv_bind_program(state, self->program);
         cv_bind_vao(state, self->vao);
 
-        // 3. Apply render states
-        cv_set_depth_state(state, self->render_state.depth_test_enabled,
-                           self->render_state.depth_func, self->render_state.depth_write_mask);
+        // One single call to sync the entire GPU state machine configuration
+        cv_sync_render_state(state, &self->render_state);
 
         // ... Apply blend state, cull state, etc. ...
 

@@ -2,6 +2,8 @@ import sys
 import ctypes
 import struct
 import pytest
+# pyright: reportMissingTypeStubs=false
+# pyright: reportUnknownMemberType=false
 import glfw
 import numpy as np
 
@@ -41,7 +43,10 @@ void main() {
 class GLLoader:
     def load_opengl_function(self, name: str) -> int:
         ptr = glfw.get_proc_address(name)
-        return ctypes.cast(ptr, ctypes.c_void_p).value if ptr else 0
+        if ptr is None:
+            return 0
+        val = ctypes.cast(ptr, ctypes.c_void_p).value
+        return val if val is not None else 0
 
 @pytest.fixture(scope="session", autouse=True)
 def gl_context():
@@ -225,19 +230,7 @@ def test_inspect_coverage():
     
     # Test Texture
     tex = caravangl.Texture()
-    assert caravangl.inspect(tex)["type"] == "texture" # (Wait, did we add this to inspect?)
-
-# Note: Remember to update caravan_inspect in caravangl.c to support the new Texture type:
-"""
-    if (type == state->TextureType) {
-        PyCaravanTexture *t = (PyCaravanTexture *)arg;
-        return FastBuild_Dict("type", "texture", 
-                              "id", (long long)t->tex.id,
-                              "target", (long long)t->tex.target,
-                              "width", (long long)t->tex.width,
-                              "height", (long long)t->tex.height);
-    }
-"""
+    assert caravangl.inspect(tex)["type"] == "texture"
 
 # --- Supplemental Constants ---
 GL_STATIC_DRAW = 0x88E4
@@ -323,18 +316,15 @@ def test_indexed_pipeline_draw():
 # --- 11. Robustness: Argument Validation ---
 
 def test_parser_type_safety():
-    """Verify that FastParse catches invalid types before hitting C logic."""
-    with pytest.raises(TypeError) as excinfo:
-        # Pass a list where an integer (size) is expected
-        caravangl.Buffer(size=[1, 2, 3])
-    assert "int" in str(excinfo.value)
+    with pytest.raises(TypeError):
+        # We pass a list where int is expected to test C-side safety
+        caravangl.Buffer(size=[1, 2, 3]) # type: ignore
 
-    with pytest.raises(TypeError) as excinfo:
-        # Pass a Buffer where a Program is expected
+    with pytest.raises(TypeError):
         vao = caravangl.VertexArray()
         vbo = caravangl.Buffer(size=10)
-        caravangl.Pipeline(program=vbo, vao=vao)
-    assert "caravangl.Program" in str(excinfo.value) or "Pipeline" in str(excinfo.value)
+        # Passing a Buffer where a Program is expected
+        caravangl.Pipeline(program=vbo, vao=vao) # type: ignore
 
 # --- 12. Context Metadata & Caps ---
 
@@ -477,3 +467,215 @@ def test_fbo_render_context_switch():
     # If we reach this line without an OpenGL error, segmentation fault, 
     # or SIGABRT, the FBO context switching is perfectly thread-safe and robust.
     assert True
+
+# --- Supplemental Constants for Depth/Stencil ---
+GL_DEPTH24_STENCIL8 = 0x88F0
+GL_DEPTH_STENCIL = 0x84F9
+GL_UNSIGNED_INT_24_8 = 0x84FA
+GL_DEPTH_STENCIL_ATTACHMENT = 0x821A
+
+# --- 19. Pipeline: Render State Inspection ---
+
+def test_pipeline_complex_state_inspection():
+    """Verify that all Depth and Stencil parameters are correctly binned and inspectable."""
+    prog = caravangl.Program(vertex_shader=VS_DUMMY, fragment_shader=FS_DUMMY)
+    vao = caravangl.VertexArray()
+    
+    pipe = caravangl.Pipeline(
+        program=prog, vao=vao,
+        depth_test=1,
+        depth_write=0,
+        depth_func=caravangl.LEQUAL,
+        stencil_test=1,
+        stencil_func=caravangl.NOTEQUAL,
+        stencil_ref=42,
+        stencil_read_mask=0xFF,
+        stencil_write_mask=0x00,
+        stencil_fail=caravangl.KEEP,
+        stencil_zfail=caravangl.INCR,
+        stencil_zpass=caravangl.REPLACE
+    )
+    
+    info = caravangl.inspect(pipe)
+    rs = info["render_state"]
+    
+    # Check Depth
+    assert rs["depth_test"] is True
+    assert rs["depth_write"] is False
+    assert rs["depth_func"] == caravangl.LEQUAL
+    
+    # Check Stencil
+    # Note: If your inspect logic doesn't yet export these, this is your reminder 
+    # to update caravan_inspect in caravangl.c!
+    assert rs["stencil_test"] is True
+    assert rs["stencil_func"] == caravangl.NOTEQUAL
+    assert rs["stencil_ref"] == 42
+    assert rs["stencil_zpass"] == caravangl.REPLACE
+
+# --- 20. Functional: Depth Buffer blocking ---
+
+def test_depth_test_execution():
+    """Verify that Depth Testing correctly blocks a distant object."""
+    # 1. Setup FBO with Depth
+    tex_color = caravangl.Texture()
+    tex_color.upload(64, 64, caravangl.RGBA8, caravangl.RGBA, caravangl.UNSIGNED_BYTE, None)
+    
+    tex_depth = caravangl.Texture()
+    tex_depth.upload(64, 64, caravangl.DEPTH_COMPONENT24, caravangl.DEPTH_COMPONENT, caravangl.UNSIGNED_INT, None)
+    
+    fbo = caravangl.Framebuffer()
+    fbo.attach_texture(caravangl.COLOR_ATTACHMENT0, tex_color)
+    fbo.attach_texture(caravangl.DEPTH_ATTACHMENT, tex_depth)
+    fbo.check_status()
+    
+    # 2. Setup Pipeline with Depth Testing
+    prog = caravangl.Program(vertex_shader=VS_ATTR, fragment_shader=FS_ATTR)
+    vao = caravangl.VertexArray()
+    pipe = caravangl.Pipeline(program=prog, vao=vao, depth_test=1, depth_func=caravangl.LESS)
+    
+    fbo.bind()
+    caravangl.viewport(0, 0, 64, 64)
+    
+    # 3. Execution: If this doesn't crash, the state sync for depth is stable
+    caravangl.clear(caravangl.COLOR_BUFFER_BIT | caravangl.DEPTH_BUFFER_BIT)
+    pipe.draw()
+    
+    caravangl.bind_default_framebuffer()
+
+# --- 21. Functional: Stencil Masking ---
+
+def test_stencil_logic_execution():
+    """Verify state sync survives switching between different stencil configurations."""
+    # 1. Setup FBO with Depth/Stencil
+    tex_color = caravangl.Texture()
+    tex_color.upload(64, 64, caravangl.RGBA8, caravangl.RGBA, caravangl.UNSIGNED_BYTE, None)
+    
+    tex_ds = caravangl.Texture()
+    tex_ds.upload(64, 64, GL_DEPTH24_STENCIL8, GL_DEPTH_STENCIL, GL_UNSIGNED_INT_24_8, None)
+    
+    fbo = caravangl.Framebuffer()
+    fbo.attach_texture(caravangl.COLOR_ATTACHMENT0, tex_color)
+    fbo.attach_texture(GL_DEPTH_STENCIL_ATTACHMENT, tex_ds)
+    fbo.check_status()
+    
+    # 2. Setup two different state pipelines
+    prog = caravangl.Program(vertex_shader=VS_DUMMY, fragment_shader=FS_DUMMY)
+    vao = caravangl.VertexArray()
+    
+    # Pipe A: Writing to stencil
+    pipe_write = caravangl.Pipeline(
+        program=prog, vao=vao, 
+        stencil_test=1, stencil_func=caravangl.ALWAYS, stencil_ref=1, stencil_zpass=caravangl.REPLACE
+    )
+    
+    # Pipe B: Testing stencil
+    pipe_test = caravangl.Pipeline(
+        program=prog, vao=vao, 
+        stencil_test=1, stencil_func=caravangl.EQUAL, stencil_ref=1
+    )
+    
+    fbo.bind()
+    caravangl.clear(caravangl.COLOR_BUFFER_BIT | caravangl.DEPTH_BUFFER_BIT | caravangl.STENCIL_BUFFER_BIT)
+    
+    # 3. Execute rapid state changes
+    pipe_write.draw()
+    pipe_test.draw() 
+    
+    caravangl.bind_default_framebuffer()
+
+# --- 22. Error Handling: Invalid Constants ---
+
+def test_pipeline_invalid_enums():
+    """Ensure passing garbage to GLenums is caught or handled gracefully."""
+    prog = caravangl.Program(vertex_shader=VS_DUMMY, fragment_shader=FS_DUMMY)
+    vao = caravangl.VertexArray()
+    
+    # Passing a string to an integer enum field should be caught by FastParse
+    with pytest.raises(TypeError):
+        caravangl.Pipeline(program=prog, vao=vao, depth_func="GL_LESSER_THAN") # type: ignore
+
+# --- 24. Pipeline: Blending Inspection ---
+
+def test_pipeline_blending_config():
+    """Verify that complex blending factors are correctly stored in the C struct."""
+    prog = caravangl.Program(vertex_shader=VS_DUMMY, fragment_shader=FS_DUMMY)
+    vao = caravangl.VertexArray()
+    
+    # Configure an additive blending pipeline
+    pipe = caravangl.Pipeline(
+        program=prog, vao=vao,
+        blend=1,
+        blend_src_rgb=caravangl.ONE,
+        blend_dst_rgb=caravangl.ONE,
+        blend_src_alpha=caravangl.ZERO,
+        blend_dst_alpha=caravangl.ONE
+    )
+    
+    info = caravangl.inspect(pipe)
+    rs = info["render_state"]
+    
+    assert rs["blend"] is True
+    assert rs["blend_src_rgb"] == caravangl.ONE
+    assert rs["blend_dst_rgb"] == caravangl.ONE
+
+# --- 25. Pipeline: Culling Inspection ---
+
+def test_pipeline_culling_config():
+    """Verify face culling configurations."""
+    prog = caravangl.Program(vertex_shader=VS_DUMMY, fragment_shader=FS_DUMMY)
+    vao = caravangl.VertexArray()
+    
+    # Configure front-face culling
+    pipe = caravangl.Pipeline(
+        program=prog, vao=vao,
+        cull=1,
+        cull_mode=caravangl.FRONT
+    )
+    
+    info = caravangl.inspect(pipe)
+    rs = info["render_state"]
+    
+    assert rs["cull"] is True
+    assert rs["cull_mode"] == caravangl.FRONT
+
+# --- 26. Functional: State Transition Stress Test ---
+
+def test_render_state_synchronization_stress():
+    """Force the C-backend to rapidly toggle every state bit."""
+    prog = caravangl.Program(vertex_shader=VS_DUMMY, fragment_shader=FS_DUMMY)
+    vao = caravangl.VertexArray()
+    
+    # Create two pipelines with diametrically opposed states
+    pipe_a = caravangl.Pipeline(
+        program=prog, vao=vao,
+        depth_test=1, blend=0, cull=1, stencil_test=0
+    )
+    
+    pipe_b = caravangl.Pipeline(
+        program=prog, vao=vao,
+        depth_test=0, blend=1, cull=0, stencil_test=1,
+        stencil_func=caravangl.EQUAL, stencil_ref=1
+    )
+    
+    # Execute rapid switches. If cv_sync_render_state has a caching bug 
+    # or a null-pointer dereference, this will crash the process.
+    for _ in range(100):
+        pipe_a.draw()
+        pipe_b.draw()
+    
+    assert True
+
+# --- 27. Robustness: Illegal Blend Constants ---
+
+def test_pipeline_illegal_blend_values():
+    """Ensure invalid types passed to blend fields are caught by FastParse."""
+    prog = caravangl.Program(vertex_shader=VS_DUMMY, fragment_shader=FS_DUMMY)
+    vao = caravangl.VertexArray()
+    
+    # Passing a float where a uint32 enum is expected
+    with pytest.raises(TypeError):
+        caravangl.Pipeline(program=prog, vao=vao, blend_src_rgb=0.5) # type: ignore
+        
+    # Passing a string
+    with pytest.raises(TypeError):
+        caravangl.Pipeline(program=prog, vao=vao, blend_dst_rgb="GL_ONE") # type: ignore

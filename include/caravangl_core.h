@@ -1182,6 +1182,9 @@ typedef enum ImageFormatTupleIndex : uint8_t {
     X(void, GetBufferSubData, GLenum target, GLintptr offset, GLsizeiptr size, void *data)         \
     X(void, BlendEquationSeparate, GLenum modeRGB, GLenum modeAlpha)                               \
     X(void, DrawBuffers, GLsizei n, const GLenum *bufs)                                            \
+    X(void, StencilOp, GLenum fail, GLenum zfail, GLenum zpass)                                    \
+    X(void, StencilFunc, GLenum func, GLint ref, GLuint mask)                                      \
+    X(void, StencilMask, GLuint mask)                                                              \
     X(void, StencilOpSeparate, GLenum face, GLenum sfail, GLenum dpfail, GLenum dppass)            \
     X(void, StencilFuncSeparate, GLenum face, GLenum func, GLint ref, GLuint mask)                 \
     X(void, StencilMaskSeparate, GLenum face, GLuint mask)                                         \

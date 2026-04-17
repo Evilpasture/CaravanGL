@@ -28,8 +28,23 @@
     X(IDX_PL_DEPTH, "depth_test", int, 0)                                                          \
     X(IDX_PL_DWRITE, "depth_write", int, 0)                                                        \
     X(IDX_PL_DFUNC, "depth_func", uint32_t, 0)                                                     \
+    X(IDX_PL_CULL, "cull", int, 0)                                                                 \
+    X(IDX_PL_CULL_MODE, "cull_mode", uint32_t, 0)                                                  \
+    X(IDX_PL_STENCIL, "stencil_test", int, 0)                                                      \
+    X(IDX_PL_SFUNC, "stencil_func", uint32_t, 0)                                                   \
+    X(IDX_PL_SREF, "stencil_ref", int, 0)                                                          \
+    X(IDX_PL_SRMASK, "stencil_read_mask", uint32_t, 0)                                             \
+    X(IDX_PL_SWMASK, "stencil_write_mask", uint32_t, 0)                                            \
+    X(IDX_PL_SFAIL, "stencil_fail", uint32_t, 0)                                                   \
+    X(IDX_PL_SZFAIL, "stencil_zfail", uint32_t, 0)                                                 \
+    X(IDX_PL_SZPASS, "stencil_zpass", uint32_t, 0)                                                 \
     X(IDX_PL_BLEND, "blend", int, 0)                                                               \
-    X(IDX_PL_CULL, "cull", int, 0)
+    X(IDX_PL_B_SRC_RGB, "blend_src_rgb", uint32_t, 0)                                              \
+    X(IDX_PL_B_DST_RGB, "blend_dst_rgb", uint32_t, 0)                                              \
+    X(IDX_PL_B_SRC_A, "blend_src_alpha", uint32_t, 0)                                              \
+    X(IDX_PL_B_DST_A, "blend_dst_alpha", uint32_t, 0)                                              \
+    X(IDX_PL_B_EQ_RGB, "blend_eq_rgb", uint32_t, 0)                                                \
+    X(IDX_PL_B_EQ_A, "blend_eq_alpha", uint32_t, 0)
 
 #define SCHEMA_PROG_INIT(X)                                                                        \
     X(IDX_PROG_VS, "vertex_shader", const char *, 1)                                               \

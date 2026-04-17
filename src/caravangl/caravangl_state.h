@@ -137,24 +137,92 @@ static inline void cv_bind_texture(CaravanState *state, GLuint unit, const Carav
 // Render State Binders (Depth, Blend, Cull)
 // -----------------------------------------------------------------------------
 
-[[gnu::always_inline, gnu::hot]]
-static inline void cv_set_depth_state(CaravanState *state, bool enabled, GLenum func,
-                                      bool write_mask) {
-    CaravanRenderState *rst = &state->ctx.bound.render;
+[[gnu::always_inline, gnu::hot]] [[gnu::always_inline, gnu::hot]]
+static inline void cv_sync_render_state(CaravanState *state, const CaravanRenderState *req) {
+    CaravanRenderState *curr = &state->ctx.bound.render;
 
-    if (rst->depth_test_enabled != enabled) {
-        (int)enabled ? state->gl.Enable(GL_DEPTH_TEST) : state->gl.Disable(GL_DEPTH_TEST);
-        rst->depth_test_enabled = enabled;
+    // 1. Depth State Sync
+    if (curr->depth_test_enabled != req->depth_test_enabled) {
+        (int)req->depth_test_enabled ? state->gl.Enable(GL_DEPTH_TEST)
+                                     : state->gl.Disable(GL_DEPTH_TEST);
+        curr->depth_test_enabled = req->depth_test_enabled;
     }
 
-    if (enabled) {
-        if (rst->depth_func != func) {
-            state->gl.DepthFunc(func);
-            rst->depth_func = func;
+    if (req->depth_test_enabled) {
+        if (curr->depth_func != req->depth_func) {
+            state->gl.DepthFunc(req->depth_func);
+            curr->depth_func = req->depth_func;
         }
-        if (rst->depth_write_mask != write_mask) {
-            state->gl.DepthMask((GLboolean)write_mask ? GL_TRUE : GL_FALSE);
-            rst->depth_write_mask = write_mask;
+        if (curr->depth_write_mask != req->depth_write_mask) {
+            state->gl.DepthMask((GLboolean)req->depth_write_mask ? GL_TRUE : GL_FALSE);
+            curr->depth_write_mask = req->depth_write_mask;
+        }
+    }
+
+    // 2. Stencil State Sync
+    if (curr->stencil_test_enabled != req->stencil_test_enabled) {
+        (int)req->stencil_test_enabled ? state->gl.Enable(GL_STENCIL_TEST)
+                                       : state->gl.Disable(GL_STENCIL_TEST);
+        curr->stencil_test_enabled = req->stencil_test_enabled;
+    }
+
+    if (req->stencil_test_enabled) {
+        // Sync StencilFunc (func, ref, read_mask)
+        if (curr->stencil_func != req->stencil_func || curr->stencil_ref != req->stencil_ref ||
+            curr->stencil_read_mask != req->stencil_read_mask) {
+            state->gl.StencilFunc(req->stencil_func, req->stencil_ref, req->stencil_read_mask);
+            curr->stencil_func = req->stencil_func;
+            curr->stencil_ref = req->stencil_ref;
+            curr->stencil_read_mask = req->stencil_read_mask;
+        }
+        // Sync StencilMask
+        if (curr->stencil_write_mask != req->stencil_write_mask) {
+            state->gl.StencilMask(req->stencil_write_mask);
+            curr->stencil_write_mask = req->stencil_write_mask;
+        }
+        // Sync StencilOp (fail, zfail, zpass)
+        if (curr->stencil_fail_op != req->stencil_fail_op ||
+            curr->stencil_zfail_op != req->stencil_zfail_op ||
+            curr->stencil_zpass_op != req->stencil_zpass_op) {
+            state->gl.StencilOp(req->stencil_fail_op, req->stencil_zfail_op, req->stencil_zpass_op);
+            curr->stencil_fail_op = req->stencil_fail_op;
+            curr->stencil_zfail_op = req->stencil_zfail_op;
+            curr->stencil_zpass_op = req->stencil_zpass_op;
+        }
+    }
+    // 3. Face Culling Sync
+    if (curr->cull_face_enabled != req->cull_face_enabled) {
+        (int)req->cull_face_enabled ? state->gl.Enable(GL_CULL_FACE)
+                                    : state->gl.Disable(GL_CULL_FACE);
+        curr->cull_face_enabled = req->cull_face_enabled;
+    }
+    if (req->cull_face_enabled && curr->cull_face_mode != req->cull_face_mode) {
+        state->gl.CullFace(req->cull_face_mode);
+        curr->cull_face_mode = req->cull_face_mode;
+    }
+
+    // 4. Blending Sync
+    if (curr->blend_enabled != req->blend_enabled) {
+        (int)req->blend_enabled ? state->gl.Enable(GL_BLEND) : state->gl.Disable(GL_BLEND);
+        curr->blend_enabled = req->blend_enabled;
+    }
+    if (req->blend_enabled) {
+        if (curr->blend_src_rgb != req->blend_src_rgb ||
+            curr->blend_dst_rgb != req->blend_dst_rgb ||
+            curr->blend_src_alpha != req->blend_src_alpha ||
+            curr->blend_dst_alpha != req->blend_dst_alpha) {
+            state->gl.BlendFuncSeparate(req->blend_src_rgb, req->blend_dst_rgb,
+                                        req->blend_src_alpha, req->blend_dst_alpha);
+            curr->blend_src_rgb = req->blend_src_rgb;
+            curr->blend_dst_rgb = req->blend_dst_rgb;
+            curr->blend_src_alpha = req->blend_src_alpha;
+            curr->blend_dst_alpha = req->blend_dst_alpha;
+        }
+        if (curr->blend_eq_rgb != req->blend_eq_rgb ||
+            curr->blend_eq_alpha != req->blend_eq_alpha) {
+            state->gl.BlendEquationSeparate(req->blend_eq_rgb, req->blend_eq_alpha);
+            curr->blend_eq_rgb = req->blend_eq_rgb;
+            curr->blend_eq_alpha = req->blend_eq_alpha;
         }
     }
 }

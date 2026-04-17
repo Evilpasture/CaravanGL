@@ -100,16 +100,26 @@ typedef struct CaravanRenderState {
     bool cull_face_enabled;
     GLenum cull_face_mode;
 
+    // Depth
     bool depth_test_enabled;
     GLenum depth_func;
     bool depth_write_mask;
 
+    // Blend
     bool blend_enabled;
     GLenum blend_src_rgb, blend_dst_rgb;
     GLenum blend_src_alpha, blend_dst_alpha;
     GLenum blend_eq_rgb, blend_eq_alpha;
 
-    // Expand with Stencil state here as needed...
+    // Stencil (NEW)
+    bool stencil_test_enabled;
+    GLenum stencil_func;
+    GLint stencil_ref;
+    GLuint stencil_read_mask;
+    GLuint stencil_write_mask;
+    GLenum stencil_fail_op;
+    GLenum stencil_zfail_op;
+    GLenum stencil_zpass_op;
 } CaravanRenderState;
 
 typedef struct CaravanContext {
