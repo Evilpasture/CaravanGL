@@ -988,41 +988,39 @@ def test_cross_thread_sync_data_consistency():
     
     # Shared VBO
     vbo = caravangl.Buffer(size=1024)
-    
-    # A list to pass the sync object between threads
     sync_queue = []
 
+    # --- 1. RELEASE from main thread ---
+    # We must do this or Windows will say "Resource in use" 
+    # when the producer tries to call make_current()
+    glfw.make_context_current(None)
+
     def producer_thread():
-        # 1. Setup context
+        # --- 2. ACQUIRE in producer ---
         main_ctx.make_current()
         
-        # 2. Write "Secret Key" 42.0 to the buffer
         data = np.full(256, 42.0, dtype=np.float32).tobytes()
         vbo.write(data)
         
-        # 3. Insert Fence
         fence = caravangl.Sync()
         sync_queue.append(fence)
         
-        # Release context
+        # --- 3. RELEASE from producer ---
+        # If we don't do this, the Main Thread will get the 
+        # "Resource in use" warning when it tries to reclaim it.
         glfw.make_context_current(None)
 
-    # 1. Run the producer
+    # Run the producer
     t = threading.Thread(target=producer_thread)
     t.start()
     t.join()
 
-    # 2. Main Thread takes over
+    # --- 4. RECLAIM in main thread ---
     main_ctx.make_current()
     
-    # 3. Wait for the producer's GPU work to finish
     fence = sync_queue[0]
     status = fence.wait(timeout_sec=2.0)
     assert status != caravangl.TIMEOUT_EXPIRED
-    
-    # 4. If we had a way to read back the buffer (e.g. glGetBufferSubData),
-    # we would verify the 42.0 here. Since your API is write-only for now, 
-    # we verify that no crash occurred during synchronization.
     assert True
 
 def test_sync_garbage_collection_stress():
