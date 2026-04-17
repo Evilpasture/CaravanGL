@@ -162,15 +162,39 @@ PyCaravanGL_API Context_make_current(PyCaravanContext *self, [[maybe_unused]] Py
     Py_RETURN_NONE;
 }
 
+PyCaravanGL_API Context_enter(PyCaravanContext *self, [[maybe_unused]] PyObject *args) {
+    // Re-use our existing make_current logic
+    if (Context_make_current(self, nullptr) == nullptr) {
+        return nullptr;
+    }
+    return Py_NewRef(self); // __enter__ must return self
+}
+
+PyCaravanGL_API Context_exit(PyCaravanContext *self, [[maybe_unused]] PyObject *args) {
+    // 1. Call the OS release callback if it exists
+    if (self->os_release_cb && self->os_release_cb != Py_None) {
+        PyObject *res = PyObject_CallNoArgs(self->os_release_cb);
+        Py_XDECREF(res); // We ignore errors in __exit__ usually, or let them propagate
+    }
+
+    // 2. Clear the Thread-Local Storage pointer
+    // This ensures no further GL calls happen on this thread until another make_current
+    cv_active_context = nullptr;
+
+    Py_RETURN_NONE;
+}
+
 PyCaravanGL_Status Context_init(PyCaravanContext *self, PyObject *args, PyObject *kwds) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
     CaravanState *state = get_caravan_state(mod);
 
     PyObject *loader = nullptr;
     PyObject *callback = Py_None;
+    PyObject *release_cb = Py_None;
 
     void *targets[ContextInit_COUNT] = {[IDX_CTX_LOADER] = (void *)&loader,
-                                        [IDX_CTX_CALLBACK] = (void *)&callback};
+                                        [IDX_CTX_CALLBACK] = (void *)&callback,
+                                        [IDX_CTX_RELEASE_CB] = (void *)&release_cb};
 
     // Use FastParse for context initialization
     if (!FastParse_Unified(args, kwds, nullptr, &state->parsers.ContextInitParser, targets)) {
@@ -198,6 +222,7 @@ PyCaravanGL_Status Context_init(PyCaravanContext *self, PyObject *args, PyObject
     // 3. Handle the Make-Current Callback
     // If user provided a callback, store it; otherwise it stays Py_None
     self->os_make_current_cb = Py_NewRef(callback);
+    self->os_release_cb = Py_NewRef(release_cb);
 
     return 0;
 }
@@ -205,6 +230,7 @@ PyCaravanGL_Status Context_init(PyCaravanContext *self, PyObject *args, PyObject
 PyCaravanGL_Slot Context_dealloc(PyCaravanContext *self) {
     PyTypeObject *type = Py_TYPE(self);
     Py_XDECREF(self->os_make_current_cb);
+    Py_XDECREF(self->os_release_cb);
     type->tp_free((PyObject *)self);
     Py_DECREF(type);
 }
@@ -225,7 +251,8 @@ PyCaravanGL_API Context_get_callback(PyCaravanContext *self, [[maybe_unused]] vo
 }
 
 // Setter for the callback
-PyCaravanGL_Status Context_set_callback(PyCaravanContext *self, PyObject *value, [[maybe_unused]] void *closure) {
+PyCaravanGL_Status Context_set_callback(PyCaravanContext *self, PyObject *value,
+                                        [[maybe_unused]] void *closure) {
     if (value == nullptr) {
         PyErr_SetString(PyExc_TypeError, "Cannot delete the os_make_current_cb attribute");
         return -1;
@@ -241,16 +268,36 @@ const PyType_Spec Context_spec = {
     .name = "caravangl.Context",
     .basicsize = sizeof(PyCaravanContext),
     .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC,
-    .slots = (PyType_Slot[]){
-        {Py_tp_init, Context_init},
-        {Py_tp_dealloc, Context_dealloc},
-        {Py_tp_getset, (PyGetSetDef[]){{"os_make_current_cb", (getter)Context_get_callback,
-                                        (setter)Context_set_callback,
-                                        "Callback to make this context current in the OS", nullptr},
-                                       {}}},
-        {Py_tp_methods, (PyMethodDef[]){{"make_current", (PyCFunction)Context_make_current,
-                                         METH_NOARGS, "Activate this context"},
-                                        {}}},
-        {Py_tp_traverse, Context_traverse},
-        {Py_tp_clear, Context_clear},
-        {}}};
+    .slots =
+        (PyType_Slot[]){
+
+            {Py_tp_init, Context_init},
+            {Py_tp_dealloc, Context_dealloc},
+            {Py_tp_getset,
+             (PyGetSetDef[]){
+
+                 {"os_make_current_cb", (getter)Context_get_callback, (setter)Context_set_callback,
+                  "Callback to make this context current in the OS", nullptr},
+                 {}}
+
+            },
+            {Py_tp_methods,
+             (PyMethodDef[]){
+
+                 {"make_current", (PyCFunction)Context_make_current, METH_NOARGS,
+                  "Activate this context"},
+                 {"__enter__", (PyCFunction)Context_enter, METH_NOARGS, nullptr},
+                 {"__exit__", (PyCFunction)Context_exit, METH_VARARGS,
+                  nullptr}, // __exit__ takes 3 args
+                 {}
+
+             }
+
+            },
+            {Py_tp_traverse, Context_traverse},
+            {Py_tp_clear, Context_clear},
+            {}
+
+        }
+
+};

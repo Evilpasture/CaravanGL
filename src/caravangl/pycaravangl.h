@@ -78,6 +78,7 @@ typedef struct PyCaravanContext {
 
     // Optional callback to trigger the OS-level glfwMakeContextCurrent
     PyObject *os_make_current_cb;
+    PyObject *os_release_cb;
 } PyCaravanContext;
 
 typedef struct {
