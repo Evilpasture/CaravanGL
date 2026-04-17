@@ -53,3 +53,8 @@ CheckOptions:
   # Standard MT-unsafe functions to watch out for
   - key:             concurrency-mt-unsafe.FunctionNames
     value:           'setenv,getenv,strtok'
+
+  - key: readability-identifier-length.MinimumVariableNameLength
+    value: 1 # Allow i, j, id, x, y
+  - key: bugprone-reserved-identifier.AllowedIdentifiers
+    value: "__builtin_.*,_.*" # Respect your C23/Compiler intrinsics
