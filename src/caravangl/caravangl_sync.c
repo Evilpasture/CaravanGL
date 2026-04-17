@@ -57,7 +57,7 @@ PyCaravanGL_API Sync_wait(PyCaravanSync *self, PyObject *const *args, Py_ssize_t
     auto state = get_caravan_state(mod);
 
     // Default to -1.0 (which we treat as None/Infinity)
-    float sec = -1.0f;
+    float sec = -1.0F;
     void *targets[SyncWait_COUNT] = {[IDX_SYNC_WAIT_SEC] = &sec};
 
     if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.SyncWaitParser, targets)) {
@@ -65,13 +65,14 @@ PyCaravanGL_API Sync_wait(PyCaravanSync *self, PyObject *const *args, Py_ssize_t
     }
 
     GLuint64 timeout_ns = GL_TIMEOUT_IGNORED;
-    if (sec >= 0.0f) {
-        timeout_ns = (GLuint64)((double)sec * 1e9);
+    if (sec >= 0.0F) {
+        constexpr double NS_PER_SEC = 1e9;
+        timeout_ns = (GLuint64)((double)sec * NS_PER_SEC);
     }
 
     WithActiveGL(OpenGL, cv_state, nullptr) {
         GLenum res = OpenGL->ClientWaitSync(self->sync_obj, GL_SYNC_FLUSH_COMMANDS_BIT, timeout_ns);
-        return PyLong_FromLong(res);
+        return PyLong_FromLong((long)res);
     }
     return nullptr;
 }

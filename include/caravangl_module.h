@@ -26,6 +26,7 @@ typedef struct CaravanGLTable {
     GL_FUNCTIONS_4_2_CORE(GL_PTR_4_2)
     GL_FUNCTIONS_4_3_CORE(GL_PTR_4_2)
     GL_FUNCTIONS_4_4_CORE(GL_PTR_4_2)
+    GL_FUNCTIONS_4_5_CORE(GL_PTR_4_2)
     GL_FUNCTIONS_4_3_OPTIONAL(GL_PTR_4_2)
     GL_FUNCTIONS_4_6_OPTIONAL(GL_PTR_4_2)
     GL_FUNCTIONS_EXT_BINDLESS(GL_PTR_4_2)
@@ -178,9 +179,10 @@ static_assert(false, "CaravanGL requires __attribute__((cleanup)) for thread saf
 #endif
 
 #if !defined(__APPLE__)
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 static void APIENTRY opengl_debug_callback(GLenum source, GLenum type, GLuint id, GLenum severity,
-                                           GLsizei length, const GLchar *message,
-                                           const void *userParam) {
+                                           [[maybe_unused]] GLsizei length, const GLchar *message,
+                                           [[maybe_unused]] const void *userParam) {
     // userParam is the 'state' pointer we passed to DebugMessageCallback.
     // This allows access to module state without global variables!
     // [[maybe_unused]] CaravanState* state = (CaravanState*)userParam;
@@ -191,10 +193,10 @@ static void APIENTRY opengl_debug_callback(GLenum source, GLenum type, GLuint id
         131218, // Shader recompilation
         131204, // Texture usage info
     };
-
+    #pragma unroll 4
     for (size_t i = 0; i < sizeof(ignore_list) / sizeof(GLuint); ++i) {
         if (id == ignore_list[i])
-            return;
+           { return;}
     }
 
     const char *_src = "Unknown";
@@ -220,6 +222,8 @@ static void APIENTRY opengl_debug_callback(GLenum source, GLenum type, GLuint id
     case GL_DEBUG_SOURCE_OTHER:
         _src = "Other";
         break;
+    default:
+        break;
     }
 
     switch (type) {
@@ -241,6 +245,8 @@ static void APIENTRY opengl_debug_callback(GLenum source, GLenum type, GLuint id
     case GL_DEBUG_TYPE_OTHER:
         _typ = "Other";
         break;
+    default:
+        break;
     }
 
     switch (severity) {
@@ -256,10 +262,13 @@ static void APIENTRY opengl_debug_callback(GLenum source, GLenum type, GLuint id
     case GL_DEBUG_SEVERITY_NOTIFICATION:
         _sev = "INFO";
         break;
+    default: 
+        break;
     }
 
     // Using raw fprintf because this callback might be triggered by a driver
     // thread where holding the Python GIL is not guaranteed.
-    fprintf(stderr, "[CaravanGL] %s | %s [%s] (ID: %u): %s\n", _src, _typ, _sev, id, message);
+    // NOLINTNEXTLINE
+    (void)fprintf(stderr, "[CaravanGL] %s | %s [%s] (ID: %u): %s\n", _src, _typ, _sev, id, message);
 }
 #endif

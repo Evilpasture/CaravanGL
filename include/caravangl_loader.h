@@ -69,10 +69,12 @@ static int load_gl_table(CaravanGLTable *table, PyObject *loader) {
 #ifndef __APPLE__
     // Standard path: Windows/Linux
 #define LOAD_OPTIONAL(ret, func_name, ...)                                                         \
-    do {                                                                                           \
+    _Pragma("unroll 2") do {                                                                       \
         table->func_name =                                                                         \
             (typeof(table->func_name))load_opengl_function(loader_function, "gl" #func_name);      \
-    } while (false);
+    }                                                                                              \
+    while (false)                                                                                  \
+        ;
 #else
     // macOS path: Poisoned/Disabled for 4.2+
 #define LOAD_OPTIONAL(ret, func_name, ...) /* NOP */
@@ -100,7 +102,8 @@ static int load_gl_table(CaravanGLTable *table, PyObject *loader) {
     Py_ssize_t missing_count = PyList_Size(missing);
     if (missing_count > 0) {
         PyErr_Format(PyExc_RuntimeError,
-                     "Your GPU driver does not support the required OpenGL 3.3 Core profile.\n"
+                     "Your GPU driver does not support the required OpenGL 3.3 "
+                     "Core profile.\n"
                      "Missing %zd required functions: %R",
                      missing_count, missing);
         Py_DECREF(missing);

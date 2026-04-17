@@ -192,5 +192,5 @@ typedef struct CaravanParsers {
     size_t registry_count;
 } CaravanParsers;
 
-void caravan_init_parsers(CaravanParsers *cp);
-void caravan_free_parsers(CaravanParsers *cp);
+void caravan_init_parsers(CaravanParsers *commonptr);
+void caravan_free_parsers(CaravanParsers *commonptr);

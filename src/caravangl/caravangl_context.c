@@ -177,11 +177,9 @@ PyCaravanGL_Status Context_init(PyCaravanContext *self, PyObject *args, PyObject
     }
 
     // 1. Initialize Thread-Safety and Shadow State
-    memset(&self->ctx.state_lock, 0, sizeof(MagMutex));
-
-    // Zero out the tracking structures
-    memset(&self->ctx.bound, 0, sizeof(self->ctx.bound));
-    memset(&self->garbage, 0, sizeof(self->garbage));
+    self->ctx.state_lock = (MagMutex){};
+    self->ctx.bound = (typeof(self->ctx.bound)){};
+    self->garbage = (CaravanGarbage){};
 
     // Initialize viewport to a safe "null" state
     self->ctx.viewport = (CaravanRect){0, 0, 0, 0};

@@ -15,6 +15,7 @@ static GLuint compile_shader(CaravanGLTable *OpenGL, GLenum type, const char *so
     // 1. SKIP EVERYTHING UNTIL '#'
     // This bypasses BOMs, invisible zero-width spaces, leading comments,
     // and weird Python docstring indentation junk.
+    #pragma unroll 2
     while (*source && *source != '#') {
         source++;
     }
@@ -23,8 +24,9 @@ static GLuint compile_shader(CaravanGLTable *OpenGL, GLenum type, const char *so
     // GLSL version or passed garbage. Try the standard aggressive trim.
     if (*source == '\0') {
         source = orig_source;
-        while (*source && (unsigned char)*source <= 32)
-            source++;
+        #pragma unroll 2
+        while (*source && isspace((unsigned char)*source))
+            {source++;}
     }
 
     if (*source == '\0') {
@@ -34,7 +36,8 @@ static GLuint compile_shader(CaravanGLTable *OpenGL, GLenum type, const char *so
 
     // 2. Trailing Trim
     GLint length = (GLint)strlen(source);
-    while (length > 0 && (unsigned char)source[length - 1] <= 32) {
+    #pragma unroll 2
+    while (length > 0 && isspace((unsigned char)source[length - 1])) {
         length--;
     }
 
@@ -45,8 +48,9 @@ static GLuint compile_shader(CaravanGLTable *OpenGL, GLenum type, const char *so
     GLint success = 0;
     OpenGL->GetShaderiv(shader, GL_COMPILE_STATUS, &success);
     if (!success) {
-        char info_log[1024];
-        OpenGL->GetShaderInfoLog(shader, 1024, nullptr, info_log);
+        constexpr auto LOG_BUFFER_SIZE = 1024;
+        char info_log[LOG_BUFFER_SIZE];
+        OpenGL->GetShaderInfoLog(shader, LOG_BUFFER_SIZE, nullptr, info_log);
         const char *type_str = (type == GL_VERTEX_SHADER) ? "Vertex" : "Fragment";
 
         PyErr_Format(PyExc_RuntimeError,

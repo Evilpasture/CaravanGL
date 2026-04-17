@@ -23,8 +23,8 @@ PyCaravanGL_Status Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObje
 
     // Stencil Defaults
     uint32_t s_func = GL_ALWAYS;
-    uint32_t s_read = 0xFFFFFFFF;
-    uint32_t s_write = 0xFFFFFFFF;
+    uint32_t s_read = ~0U;
+    uint32_t s_write = ~0U;
     int s_ref = 0;
     uint32_t s_fail = GL_KEEP;
     uint32_t s_zfail = GL_KEEP;

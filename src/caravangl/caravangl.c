@@ -245,7 +245,7 @@ PyCaravanGL_API caravan_get_active_context([[maybe_unused]] PyObject *mod,
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 PyCaravanGL_API caravan_meth_enable_debug([[maybe_unused]] PyObject *mod,
                                           [[maybe_unused]] PyObject *args) {
-#if !defined(__APPLE__)
+#ifndef __APPLE__
     // We fetch the module state to pass as the userParam to the callback.
     // This allows the callback to access module-level resources without globals.
     CaravanState *state = get_caravan_state(mod);
@@ -472,7 +472,7 @@ static int init_constants(PyObject *mod) {
 #endif
                   },
                   {"DEBUG_BUILD",
-#if defined(CARAVANGL_DEBUG)
+#ifdef CARAVANGL_DEBUG
                    1
 #else
                    0
@@ -498,7 +498,8 @@ PyCaravanGL_Status caravan_exec(PyObject *mod) {
     }
 
     // Zero out state and prepare fast-path parsers
-    memset(state, 0, sizeof(CaravanState));
+    state = (CaravanState *){};
+
     caravan_init_parsers(&state->parsers);
 
     // Register Classes

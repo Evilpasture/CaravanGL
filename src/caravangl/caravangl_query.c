@@ -67,7 +67,7 @@ PyCaravanGL_API Query_is_ready(PyCaravanQuery *self, [[maybe_unused]] PyObject *
     WithActiveGL(OpenGL, cv_state, nullptr) {
         OpenGL->GetQueryObjectuiv(self->id, GL_QUERY_RESULT_AVAILABLE, &available);
     }
-    return PyBool_FromLong(available);
+    return PyBool_FromLong((long)available);
 }
 
 PyCaravanGL_API Query_get_result(PyCaravanQuery *self, [[maybe_unused]] PyObject *args) {
