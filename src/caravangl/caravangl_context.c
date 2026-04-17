@@ -136,21 +136,26 @@ void cv_flush_garbage(PyCaravanContext *self) {
  * Activates this context for the current thread.
  */
 PyCaravanGL_API Context_make_current(PyCaravanContext *self, [[maybe_unused]] PyObject *args) {
-    // 1. If user provided an OS callback (e.g., glfwMakeContextCurrent), call it
+    // 1. LOCK FIRST. No one can steal the context or draw while we are switching.
+    MagMutex_Lock(&self->ctx.state_lock);
+
+    // 2. Call the OS callback while holding the lock
     if (self->os_make_current_cb && self->os_make_current_cb != Py_None) {
         PyObject *res = PyObject_CallNoArgs(self->os_make_current_cb);
         if (!res) {
+            MagMutex_Unlock(&self->ctx.state_lock); // Don't forget to unlock on error!
             return nullptr;
         }
         Py_DECREF(res);
     }
 
-    // 2. Set the Thread-Local pointer
+    // 3. Set the Thread-Local pointer
     cv_active_context = self;
 
-    // 3. Flush any pending garbage left over from other threads deleting things
-    MagMutex_Lock(&self->ctx.state_lock);
+    // 4. Flush garbage
     cv_flush_garbage(self);
+
+    // 5. UNLOCK
     MagMutex_Unlock(&self->ctx.state_lock);
 
     Py_RETURN_NONE;
