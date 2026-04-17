@@ -12,14 +12,14 @@
             .convert = FP_GET_CONVERTER((TYPE){0})},
 
 // Only works if the types and sizes match exactly
-#define SETUP_PARSER(cp, P, G, S)                                             \
-    do {                                                                      \
-        FastArgSpec temp[] = {S(GEN_SPEC)};                                   \
-        _Pragma("unroll") for (size_t i = 0; i < sizeof(temp)/sizeof(temp[0]); ++i) {           \
-            (cp)->P##Specs[i] = temp[i];                                      \
-        }                                                                     \
-        fp_init_impl(&(cp)->P##Parser, (cp)->P##Specs, G##_COUNT);            \
-        (cp)->P##Parser.parser_name = #P;                                     \
+#define SETUP_PARSER(cp, P, G, S)                                                                  \
+    do {                                                                                           \
+        FastArgSpec temp[] = {S(GEN_SPEC)};                                                        \
+        _Pragma("unroll") for (size_t i = 0; i < sizeof(temp) / sizeof(temp[0]); ++i) {            \
+            (cp)->P##Specs[i] = temp[i];                                                           \
+        }                                                                                          \
+        fp_init_impl(&(cp)->P##Parser, (cp)->P##Specs, G##_COUNT);                                 \
+        (cp)->P##Parser.parser_name = #P;                                                          \
     } while (false)
 
 void caravan_init_parsers(CaravanParsers *commonptr) {

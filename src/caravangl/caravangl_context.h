@@ -2,6 +2,7 @@
 #include "pycaravangl.h"
 
 // THREAD LOCAL STORAGE: Tracks the active context for the current OS thread
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 extern thread_local PyCaravanContext *cv_active_context;
 
 // API to switch contexts

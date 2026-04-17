@@ -8,7 +8,8 @@
 // -----------------------------------------------------------------------------
 
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_bind_program(CaravanContext *ctx, const CaravanGLTable *const OpenGL, GLuint program) {
+static inline void cv_bind_program(CaravanContext *ctx, const CaravanGLTable *const OpenGL,
+                                   GLuint program) {
     if (ctx->bound.program != program) [[clang::unlikely]] {
         ctx->bound.program = program;
         OpenGL->UseProgram(program);
@@ -16,7 +17,8 @@ static inline void cv_bind_program(CaravanContext *ctx, const CaravanGLTable *co
 }
 
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_bind_vao(CaravanContext *ctx, const CaravanGLTable *const OpenGL, GLuint vao) {
+static inline void cv_bind_vao(CaravanContext *ctx, const CaravanGLTable *const OpenGL,
+                               GLuint vao) {
     if (ctx->bound.vao != vao) [[clang::unlikely]] {
         ctx->bound.vao = vao;
         OpenGL->BindVertexArray(vao);
@@ -24,7 +26,8 @@ static inline void cv_bind_vao(CaravanContext *ctx, const CaravanGLTable *const 
 }
 
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_bind_fbo_draw(CaravanContext *ctx, const CaravanGLTable *const OpenGL, GLuint fbo) {
+static inline void cv_bind_fbo_draw(CaravanContext *ctx, const CaravanGLTable *const OpenGL,
+                                    GLuint fbo) {
     if (ctx->bound.fbo_draw != fbo) [[clang::unlikely]] {
         OpenGL->BindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
         ctx->bound.fbo_draw = fbo;
@@ -32,7 +35,8 @@ static inline void cv_bind_fbo_draw(CaravanContext *ctx, const CaravanGLTable *c
 }
 
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_bind_fbo_read(CaravanContext *ctx, const CaravanGLTable *const OpenGL, GLuint fbo) {
+static inline void cv_bind_fbo_read(CaravanContext *ctx, const CaravanGLTable *const OpenGL,
+                                    GLuint fbo) {
     if (ctx->bound.fbo_read != fbo) [[clang::unlikely]] {
         OpenGL->BindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
         ctx->bound.fbo_read = fbo;
@@ -40,7 +44,8 @@ static inline void cv_bind_fbo_read(CaravanContext *ctx, const CaravanGLTable *c
 }
 
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_bind_fbo_combined(CaravanContext *ctx, const CaravanGLTable *const OpenGL, GLuint fbo) {
+static inline void cv_bind_fbo_combined(CaravanContext *ctx, const CaravanGLTable *const OpenGL,
+                                        GLuint fbo) {
     if (ctx->bound.fbo_draw != fbo || ctx->bound.fbo_read != fbo) [[clang::unlikely]] {
         OpenGL->BindFramebuffer(GL_FRAMEBUFFER, fbo);
         ctx->bound.fbo_draw = fbo;
@@ -64,8 +69,9 @@ static inline void cv_bind_viewport(CaravanContext *ctx, const CaravanGLTable *c
 // -----------------------------------------------------------------------------
 
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_bind_ubo_range(CaravanContext *ctx, const CaravanGLTable *const OpenGL, GLuint index,
-                                     GLuint buffer, GLintptr offset, GLsizeiptr size) {
+static inline void cv_bind_ubo_range(CaravanContext *ctx, const CaravanGLTable *const OpenGL,
+                                     GLuint index, GLuint buffer, GLintptr offset,
+                                     GLsizeiptr size) {
     if (index >= CARAVAN_MAX_UBO_BINDINGS) [[clang::unlikely]] {
         return;
     }
@@ -81,8 +87,8 @@ static inline void cv_bind_ubo_range(CaravanContext *ctx, const CaravanGLTable *
 }
 
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_bind_texture(CaravanContext *ctx, const CaravanGLTable *const OpenGL, GLuint unit,
-                                   const CaravanTexture *tex, GLuint sampler) {
+static inline void cv_bind_texture(CaravanContext *ctx, const CaravanGLTable *const OpenGL,
+                                   GLuint unit, const CaravanTexture *tex, GLuint sampler) {
     if (unit >= CARAVAN_MAX_TEXTURE_UNITS) [[clang::unlikely]] {
         return;
     }

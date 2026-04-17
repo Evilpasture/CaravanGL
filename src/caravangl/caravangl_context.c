@@ -2,6 +2,7 @@
 #include "caravangl_loader.h"
 
 // Define the TLS variable
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 thread_local PyCaravanContext *cv_active_context = nullptr;
 
 // -----------------------------------------------------------------------------
@@ -41,7 +42,7 @@ static void query_capabilities(PyCaravanContext *self) {
     ctx->caps.support_compute = (OpenGL->DispatchCompute != nullptr);
     ctx->caps.support_bindless = (OpenGL->GetTextureHandleARB != nullptr);
 
-    if (ctx->caps.support_compute && OpenGL->GetIntegerv != nullptr) {
+    if ((int)ctx->caps.support_compute && OpenGL->GetIntegerv != nullptr) {
         OpenGL->GetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS,
                             &ctx->caps.max_compute_work_group_invocations);
         OpenGL->GetIntegerv(GL_MAX_SHADER_STORAGE_BLOCK_SIZE,
@@ -224,7 +225,7 @@ PyCaravanGL_API Context_get_callback(PyCaravanContext *self, [[maybe_unused]] vo
 }
 
 // Setter for the callback
-PyCaravanGL_Status Context_set_callback(PyCaravanContext *self, PyObject *value, void *closure) {
+PyCaravanGL_Status Context_set_callback(PyCaravanContext *self, PyObject *value, [[maybe_unused]] void *closure) {
     if (value == nullptr) {
         PyErr_SetString(PyExc_TypeError, "Cannot delete the os_make_current_cb attribute");
         return -1;

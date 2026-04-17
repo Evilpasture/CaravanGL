@@ -108,7 +108,6 @@ SAMPLES_PASSED: int
 ANY_SAMPLES_PASSED: int
 PRIMITIVES_GENERATED: int
 
-
 # --- Module Level Functions ---
 
 def enable_debug() -> None: ...
@@ -128,17 +127,38 @@ class Context:
     def make_current(self) -> None: ...
 
 class Buffer:
-    def __init__(self, size: int, data: _BufferProtocol | None = None, target: int = ..., usage: int = ...) -> None: ...
+    def __init__(
+        self,
+        size: int,
+        data: _BufferProtocol | None = None,
+        target: int = ...,
+        usage: int = ...,
+    ) -> None: ...
     def write(self, data: _BufferProtocol, offset: int = 0) -> None: ...
     def bind_base(self, index: int) -> None: ...
 
 class Sampler:
-    def __init__(self, min_filter: int = ..., mag_filter: int = ..., wrap_s: int = ..., wrap_t: int = ...) -> None: ...
+    def __init__(
+        self,
+        min_filter: int = ...,
+        mag_filter: int = ...,
+        wrap_s: int = ...,
+        wrap_t: int = ...,
+    ) -> None: ...
 
 class Texture:
     def __init__(self, target: int = ...) -> None: ...
-    def upload(self, width: int, height: int, internal_format: int, format: int, type: int, 
-               data: _BufferProtocol | None = None, level: int = 0, depth: int = 0) -> None: ...
+    def upload(
+        self,
+        width: int,
+        height: int,
+        internal_format: int,
+        format: int,
+        type: int,
+        data: _BufferProtocol | None = None,
+        level: int = 0,
+        depth: int = 0,
+    ) -> None: ...
     def bind(self, unit: int, sampler: Sampler | None = None) -> None: ...
     def generate_mipmap(self) -> None: ...
 
@@ -148,8 +168,17 @@ class Program:
 
 class VertexArray:
     def __init__(self) -> None: ...
-    def bind_attribute(self, location: int, buffer: Buffer, size: int, type: int, 
-                       normalized: int = 0, stride: int = 0, offset: int = 0, divisor: int = 0) -> None: ...
+    def bind_attribute(
+        self,
+        location: int,
+        buffer: Buffer,
+        size: int,
+        type: int,
+        normalized: int = 0,
+        stride: int = 0,
+        offset: int = 0,
+        divisor: int = 0,
+    ) -> None: ...
     def bind_index_buffer(self, buffer: Buffer) -> None: ...
 
 class UniformBatch:
@@ -160,14 +189,14 @@ class UniformBatch:
 
 class Pipeline:
     def __init__(
-        self, 
-        program: Program, 
-        vao: VertexArray, 
-        topology: int = ..., 
-        index_type: int = ..., 
-        depth_test: int = 0, 
-        depth_write: int = 1, 
-        depth_func: int = ..., 
+        self,
+        program: Program,
+        vao: VertexArray,
+        topology: int = ...,
+        index_type: int = ...,
+        depth_test: int = 0,
+        depth_write: int = 1,
+        depth_func: int = ...,
         cull: int = 0,
         cull_mode: int = ...,
         front_face: int = CCW,
@@ -179,24 +208,24 @@ class Pipeline:
         stencil_fail: int = ...,
         stencil_zfail: int = ...,
         stencil_zpass: int = ...,
-        blend: int = 0, 
+        blend: int = 0,
         blend_src_rgb: int = ...,
         blend_dst_rgb: int = ...,
         blend_src_alpha: int = ...,
         blend_dst_alpha: int = ...,
         blend_eq_rgb: int = ...,
-        blend_eq_alpha: int = ...
+        blend_eq_alpha: int = ...,
     ) -> None: ...
-    
     def upload_uniforms(self, batch: UniformBatch) -> None: ...
     def draw(self) -> None: ...
-    
     @property
     def params(self) -> memoryview: ...
 
 class Framebuffer:
     def __init__(self) -> None: ...
-    def attach_texture(self, attachment: int, texture: Texture, level: int = 0) -> None: ...
+    def attach_texture(
+        self, attachment: int, texture: Texture, level: int = 0
+    ) -> None: ...
     def check_status(self) -> bool: ...
     def bind(self) -> None: ...
 
@@ -213,22 +242,96 @@ class Query:
     def get_result(self) -> int: ...
 
 __all__ = [
-    "Context", "Buffer", "Sampler", "Texture", "Program", "VertexArray", "UniformBatch", "Pipeline", "Framebuffer", "Sync",
-    "enable_debug", "context", "inspect", "clear", "clear_color", "viewport", 
-    "bind_default_framebuffer", "get_active_context",
-    "FLOAT", "UNSIGNED_BYTE", "UNSIGNED_SHORT", "UNSIGNED_INT", "UNSIGNED_INT_24_8",
-    "TRIANGLES", "LINES", "POINTS",
-    "UF_1I", "UF_3I", "UF_1F", "UF_2F", "UF_3F", "UF_4F", "UF_MAT4", "UF_MAT4_RM",
-    "ARRAY_BUFFER", "ELEMENT_ARRAY_BUFFER", "UNIFORM_BUFFER", "STATIC_DRAW", "DYNAMIC_DRAW", "STREAM_DRAW",
-    "TEXTURE_2D", "TEXTURE_3D", "RGBA", "RGB", "RGBA8", 
-    "DEPTH_COMPONENT", "DEPTH_COMPONENT24", "DEPTH24_STENCIL8", "DEPTH_STENCIL",
-    "FRAMEBUFFER", "COLOR_ATTACHMENT0", "DEPTH_ATTACHMENT", "DEPTH_STENCIL_ATTACHMENT",
-    "COLOR_BUFFER_BIT", "DEPTH_BUFFER_BIT", "STENCIL_BUFFER_BIT",
-    "NEVER", "LESS", "EQUAL", "LEQUAL", "GREATER", "NOTEQUAL", "GEQUAL", "ALWAYS",
-    "KEEP", "ZERO", "REPLACE", "INCR", "INCR_WRAP", "DECR", "DECR_WRAP", "INVERT",
-    "FRONT", "BACK", "FRONT_AND_BACK",
-    "SRC_ALPHA", "ONE_MINUS_SRC_ALPHA", "ONE", "FUNC_ADD",
-    "NEAREST", "LINEAR", "REPEAT", "CLAMP_TO_EDGE",
-    "CW", "CCW", "TIMEOUT_IGNORED", "ALREADY_SIGNALED", "TIMEOUT_EXPIRED", "CONDITION_SATISFIED", "WAIT_FAILED",
-    "FREE_THREADED", "DEBUG_BUILD"
+    "Context",
+    "Buffer",
+    "Sampler",
+    "Texture",
+    "Program",
+    "VertexArray",
+    "UniformBatch",
+    "Pipeline",
+    "Framebuffer",
+    "Sync",
+    "enable_debug",
+    "context",
+    "inspect",
+    "clear",
+    "clear_color",
+    "viewport",
+    "bind_default_framebuffer",
+    "get_active_context",
+    "FLOAT",
+    "UNSIGNED_BYTE",
+    "UNSIGNED_SHORT",
+    "UNSIGNED_INT",
+    "UNSIGNED_INT_24_8",
+    "TRIANGLES",
+    "LINES",
+    "POINTS",
+    "UF_1I",
+    "UF_3I",
+    "UF_1F",
+    "UF_2F",
+    "UF_3F",
+    "UF_4F",
+    "UF_MAT4",
+    "UF_MAT4_RM",
+    "ARRAY_BUFFER",
+    "ELEMENT_ARRAY_BUFFER",
+    "UNIFORM_BUFFER",
+    "STATIC_DRAW",
+    "DYNAMIC_DRAW",
+    "STREAM_DRAW",
+    "TEXTURE_2D",
+    "TEXTURE_3D",
+    "RGBA",
+    "RGB",
+    "RGBA8",
+    "DEPTH_COMPONENT",
+    "DEPTH_COMPONENT24",
+    "DEPTH24_STENCIL8",
+    "DEPTH_STENCIL",
+    "FRAMEBUFFER",
+    "COLOR_ATTACHMENT0",
+    "DEPTH_ATTACHMENT",
+    "DEPTH_STENCIL_ATTACHMENT",
+    "COLOR_BUFFER_BIT",
+    "DEPTH_BUFFER_BIT",
+    "STENCIL_BUFFER_BIT",
+    "NEVER",
+    "LESS",
+    "EQUAL",
+    "LEQUAL",
+    "GREATER",
+    "NOTEQUAL",
+    "GEQUAL",
+    "ALWAYS",
+    "KEEP",
+    "ZERO",
+    "REPLACE",
+    "INCR",
+    "INCR_WRAP",
+    "DECR",
+    "DECR_WRAP",
+    "INVERT",
+    "FRONT",
+    "BACK",
+    "FRONT_AND_BACK",
+    "SRC_ALPHA",
+    "ONE_MINUS_SRC_ALPHA",
+    "ONE",
+    "FUNC_ADD",
+    "NEAREST",
+    "LINEAR",
+    "REPEAT",
+    "CLAMP_TO_EDGE",
+    "CW",
+    "CCW",
+    "TIMEOUT_IGNORED",
+    "ALREADY_SIGNALED",
+    "TIMEOUT_EXPIRED",
+    "CONDITION_SATISFIED",
+    "WAIT_FAILED",
+    "FREE_THREADED",
+    "DEBUG_BUILD",
 ]

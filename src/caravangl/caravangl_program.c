@@ -7,15 +7,16 @@
 // -----------------------------------------------------------------------------
 
 static GLuint compile_shader(const CaravanGLTable *const OpenGL, GLenum type, const char *source) {
-    if (source == nullptr) [[clang::unlikely]]
-        {return 0;}
+    if (source == nullptr) [[clang::unlikely]] {
+        return 0;
+    }
 
     const char *orig_source = source;
 
-    // 1. SKIP EVERYTHING UNTIL '#'
-    // This bypasses BOMs, invisible zero-width spaces, leading comments,
-    // and weird Python docstring indentation junk.
-    #pragma unroll 2
+// 1. SKIP EVERYTHING UNTIL '#'
+// This bypasses BOMs, invisible zero-width spaces, leading comments,
+// and weird Python docstring indentation junk.
+#pragma unroll 2
     while (*source && *source != '#') {
         source++;
     }
@@ -24,9 +25,10 @@ static GLuint compile_shader(const CaravanGLTable *const OpenGL, GLenum type, co
     // GLSL version or passed garbage. Try the standard aggressive trim.
     if (*source == '\0') {
         source = orig_source;
-        #pragma unroll 2
-        while (*source && isspace((unsigned char)*source))
-            {source++;}
+#pragma unroll 2
+        while (*source && isspace((unsigned char)*source)) {
+            source++;
+        }
     }
 
     if (*source == '\0') {
@@ -36,7 +38,7 @@ static GLuint compile_shader(const CaravanGLTable *const OpenGL, GLenum type, co
 
     // 2. Trailing Trim
     GLint length = (GLint)strlen(source);
-    #pragma unroll 2
+#pragma unroll 2
     while (length > 0 && isspace((unsigned char)source[length - 1])) {
         length--;
     }

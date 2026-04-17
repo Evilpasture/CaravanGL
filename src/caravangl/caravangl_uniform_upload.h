@@ -23,7 +23,8 @@ typedef struct {
  * Executes a batch of uniform uploads using the function pointer table.
  */
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_upload_uniform_batch(const CaravanGLTable *const OpenGL, CaravanUniformSource src) {
+static inline void cv_upload_uniform_batch(const CaravanGLTable *const OpenGL,
+                                           CaravanUniformSource src) {
     const CaravanUniformHeader *header = src.header;
     const char *data = (const char *)src.payload;
 #pragma unroll 4
