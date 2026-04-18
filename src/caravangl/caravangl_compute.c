@@ -48,16 +48,25 @@ PyCaravanGL_Status ComputePipeline_init(PyCaravanComputePipeline *self, PyObject
     return 0;
 }
 
-PyCaravanGL_API ComputePipeline_dispatch(PyCaravanComputePipeline *self, PyObject *args) {
-    uint32_t x = 0;
-    uint32_t y = 0;
-    uint32_t z = 0;
-    if (!PyArg_ParseTuple(args, "III", &x, &y, &z)) {
+PyCaravanGL_API ComputePipeline_dispatch(PyCaravanComputePipeline *self, PyObject *const *args,
+                                         Py_ssize_t nargs, PyObject *kwnames) {
+    PyObject *mod = PyType_GetModule(Py_TYPE(self));
+    auto state = get_caravan_state(mod);
+
+    uint32_t x = 1;
+    uint32_t y = 1;
+    uint32_t z = 1;
+
+    void *targets[ComputeDispatch_COUNT] = {
+        [IDX_COMP_X] = &x, [IDX_COMP_Y] = &y, [IDX_COMP_Z] = &z};
+
+    if (!FastParse_Unified(args, nargs, kwnames, &state->parsers.ComputeDispatchParser, targets)) {
         return nullptr;
     }
 
     WithActiveGL(OpenGL, cv_state, nullptr) {
 #ifndef __APPLE__
+        // We ensure the compute program is bound before dispatching
         OpenGL->UseProgram(self->id);
         OpenGL->DispatchCompute(x, y, z);
 #endif
@@ -96,7 +105,7 @@ const PyType_Spec ComputePipeline_spec = {
             {Py_tp_methods,
              (PyMethodDef[]){
 
-                 {"dispatch", (PyCFunction)ComputePipeline_dispatch, METH_VARARGS,
+                 {"dispatch", CARAVAN_CAST(ComputePipeline_dispatch), METH_FASTCALL | METH_KEYWORDS,
                   "Launch compute kernel"},
                  {}
 

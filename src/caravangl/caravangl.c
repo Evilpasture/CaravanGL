@@ -115,8 +115,7 @@ static inline PyObject *inspect_uniform_batch(PyCaravanUniformBatch *bat) {
 }
 
 static inline PyObject *inspect_compute_pipeline(PyCaravanComputePipeline *comp) {
-    return FastBuild_Dict("type", "compute_pipeline", 
-                          "id", (Py_ssize_t)comp->id);
+    return FastBuild_Dict("type", "compute_pipeline", "id", (Py_ssize_t)comp->id);
 }
 
 // --- Main Dispatcher ---
