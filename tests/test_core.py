@@ -1,4 +1,5 @@
 import sys
+import struct
 import ctypes
 import pytest
 import threading
@@ -319,3 +320,146 @@ def test_query_occlusion():
     
     pixels_drawn = query.get_result()
     assert pixels_drawn >= 0 # Should be 0 in this dummy case
+
+# --- 4. BUFFER PERSISTENT MAPPING (DMA) ---
+
+def test_buffer_persistent_mapping():
+    """Verify DMA mapping on supported platforms (Windows/Linux)."""
+    # Create a small buffer
+    vbo = caravangl.Buffer(size=1024)
+    info = caravangl.inspect(vbo)
+    assert info is not None
+
+    if info.get("is_persistent"):
+        # --- SUCCESS PATH (Windows/Linux) ---
+        mv = vbo.map()
+        assert len(mv) == 1024
+        
+        # Write data directly to the memoryview
+        data = np.random.randint(0, 255, 1024, dtype=np.uint8)
+        mv[:] = data.tobytes()
+        assert True
+    else:
+        # --- FALLBACK PATH (macOS) ---
+        with pytest.raises(RuntimeError) as exc:
+            vbo.map()
+        assert "not supported" in str(exc.value).lower()
+
+# --- 5. FRAMEBUFFER & ATTACHMENTS ---
+
+def test_framebuffer_completeness():
+    """Verify FBO creation and texture attachment."""
+    fbo = caravangl.Framebuffer()
+    tex = caravangl.Texture(target=caravangl.TEXTURE_2D)
+    
+    # Allocate texture storage
+    tex.upload(512, 512, caravangl.RGBA8, caravangl.RGBA, caravangl.UNSIGNED_BYTE, None)
+    
+    # 1. Attach
+    fbo.attach_texture(caravangl.COLOR_ATTACHMENT0, tex)
+    
+    # 2. Check completeness
+    assert fbo.check_status() is True
+    
+    # 3. Test binding
+    fbo.bind()
+    caravangl.viewport(0, 0, 512, 512)
+    caravangl.clear(caravangl.COLOR_BUFFER_BIT)
+    
+    # Clean up
+    caravangl.bind_default_framebuffer()
+
+# --- 6. SAMPLER CACHE PROTECTION ---
+
+def test_sampler_dealloc_safety():
+    """Verify that deleting a bound sampler clears the C-side cache."""
+    tex = caravangl.Texture()
+    tex.upload(2, 2, caravangl.RGBA8, caravangl.RGBA, caravangl.UNSIGNED_BYTE, None)
+    
+    # 1. Create and bind sampler
+    s1 = caravangl.Sampler()
+    tex.bind(unit=0, sampler=s1)
+    
+    # 2. Delete the sampler (triggers C dealloc)
+    del s1
+    
+    # 3. Create a new sampler (likely gets the same pointer/ID from the driver)
+    s2 = caravangl.Sampler()
+    
+    # 4. Re-bind. If the C-cache wasn't cleared, the engine might skip the 
+    # driver call thinking s1 is still bound.
+    tex.bind(unit=0, sampler=s2)
+    assert True
+
+# --- 7. INDEXED DRAWING (IBO) ---
+
+def test_indexed_draw_path():
+    """Verify glDrawElements path in Pipeline."""
+    prog = caravangl.Program(vertex_shader=VS_DUMMY, fragment_shader=FS_DUMMY)
+    vao = caravangl.VertexArray()
+    
+    # Vertices (3 points)
+    v_data = np.zeros(9, dtype=np.float32).tobytes()
+    vbo = caravangl.Buffer(size=len(v_data), data=v_data)
+    vao.bind_attribute(0, vbo, 3, caravangl.FLOAT)
+    
+    # Indices (1 triangle)
+    i_data = np.array([0, 1, 2], dtype=np.uint32).tobytes()
+    ibo = caravangl.Buffer(size=len(i_data), data=i_data, target=caravangl.ELEMENT_ARRAY_BUFFER)
+    vao.bind_index_buffer(ibo)
+    
+    # Create indexed pipeline
+    pipe = caravangl.Pipeline(
+        program=prog, vao=vao, 
+        index_type=caravangl.UNSIGNED_INT
+    )
+    pipe.params[0] = 3 # 3 indices
+    
+    pipe.draw()
+    assert True
+
+# --- 8. CONTEXT MANAGER EXCEPTION SAFETY ---
+
+def test_context_manager_exception_safety():
+    """Ensure context is released even if Python code explodes."""
+    main_window = glfw.get_current_context()
+    assert main_window is not None
+    main_ctx = caravangl.get_active_context()
+    assert main_ctx is not None
+
+    # Release context from thread
+    glfw.make_context_current(None)
+
+    try:
+        with main_ctx:
+            # Simulate a crash inside the GPU block
+            raise ValueError("GPU logic failed")
+    except ValueError:
+        pass
+
+    # If the context manager worked, the baton was released in __exit__.
+    # The next thread (or this one) should be able to take it immediately 
+    # without a "Resource in Use" error.
+    main_ctx.make_current()
+    assert True
+
+# --- 9. UNIFORM BATCH CONTIGUITY ---
+
+def test_uniform_batch_packing():
+    """Verify that multiple uniforms can be packed into a zero-copy batch."""
+    batch = caravangl.UniformBatch(max_bindings=5, max_bytes=128)
+    
+    # Add a float (4 bytes) and a mat4 (64 bytes)
+    off1 = batch.add(caravangl.UF_1F, location=0, count=1, size=4)
+    off2 = batch.add(caravangl.UF_MAT4, location=1, count=1, size=64)
+    
+    assert off1 == 0
+    assert off2 == 4
+    
+    # Verify memoryview access
+    data = batch.data
+    assert len(data) == 128
+    
+    # Write a test float to first slot
+    struct.pack_into("f", data, off1, 3.14)
+    assert True

@@ -69,7 +69,6 @@ PyCaravanGL_Status Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObje
         Py_XSETREF(self->program_ref, Py_NewRef(py_program));
         Py_XSETREF(self->vao_ref, Py_NewRef(py_vao));
 
-        // 2. VAO Context Validation: VAOs cannot be shared!
         if (((PyCaravanVertexArray *)py_vao)->owning_context != _cv_ctx) {
             PyErr_SetString(PyExc_RuntimeError, "VertexArray belongs to a different Context.");
             return -1;
@@ -80,28 +79,35 @@ PyCaravanGL_Status Pipeline_init(PyCaravanPipeline *self, PyObject *args, PyObje
         self->topology = topology;
         self->index_type = index_type;
 
-        // 3. Baked Render State
-        self->render_state = (CaravanRenderState){.depth_test_enabled = (bool)depth_test,
-                                                  .depth_write_mask = (bool)depth_write,
-                                                  .depth_func = depth_func,
-                                                  .stencil_test_enabled = (bool)stencil_test,
-                                                  .stencil_func = s_func,
-                                                  .stencil_ref = s_ref,
-                                                  .stencil_read_mask = s_read,
-                                                  .stencil_write_mask = s_write,
-                                                  .stencil_fail_op = s_fail,
-                                                  .stencil_zfail_op = s_zfail,
-                                                  .stencil_zpass_op = s_zpass,
-                                                  .cull_face_enabled = (bool)cull,
-                                                  .cull_face_mode = cull_mode,
-                                                  .front_face = front_face,
-                                                  .blend_enabled = (bool)blend,
-                                                  .blend_src_rgb = b_src_rgb,
-                                                  .blend_dst_rgb = b_dst_rgb,
-                                                  .blend_src_alpha = b_src_a,
-                                                  .blend_dst_alpha = b_dst_a,
-                                                  .blend_eq_rgb = b_eq_rgb,
-                                                  .blend_eq_alpha = b_eq_a};
+        // 2. Baked Render State
+        // We use a compound literal. C99+ rules guarantee that any fields
+        // not explicitly mentioned (like _bitfield_pad and _extra_padding)
+        // are initialized to ZERO. This makes the cv_render_state_equals
+        // comparison deterministic.
+        self->render_state =
+            (CaravanRenderState){.cull_face_mode = cull_mode,
+                                 .front_face = front_face,
+                                 .depth_func = depth_func,
+                                 .blend_src_rgb = b_src_rgb,
+                                 .blend_dst_rgb = b_dst_rgb,
+                                 .blend_src_alpha = b_src_a,
+                                 .blend_dst_alpha = b_dst_a,
+                                 .blend_eq_rgb = b_eq_rgb,
+                                 .blend_eq_alpha = b_eq_a,
+                                 .stencil_func = s_func,
+                                 .stencil_ref = s_ref,
+                                 .stencil_read_mask = s_read,
+                                 .stencil_write_mask = s_write,
+                                 .stencil_fail_op = s_fail,
+                                 .stencil_zfail_op = s_zfail,
+                                 .stencil_zpass_op = s_zpass,
+
+                                 // Bitfield assignments (0 or 1)
+                                 .cull_face_enabled = (uint32_t)(cull != 0),
+                                 .depth_test_enabled = (uint32_t)(depth_test != 0),
+                                 .depth_write_mask = (uint32_t)(depth_write != 0),
+                                 .blend_enabled = (uint32_t)(blend != 0),
+                                 .stencil_test_enabled = (uint32_t)(stencil_test != 0)};
 
         self->params = (CaravanDrawParams){
             .vertex_count = 0, .instance_count = 1, .first_vertex = 0, .base_instance = 0};
@@ -133,7 +139,8 @@ PyCaravanGL_API Pipeline_upload_uniforms(PyCaravanPipeline *self, PyObject *cons
     auto batch = (PyCaravanUniformBatch *)py_batch;
 
     WithActiveGL(OpenGL, cv_state, nullptr) {
-        cv_bind_program(cv_state, OpenGL, self->program);
+        cv_set_program(cv_state, self->program);
+        cv_resolve(cv_state, OpenGL); // MUST resolve before upload!
         cv_upload_uniform_batch(
             OpenGL, (CaravanUniformSource){.header = batch->header, .payload = batch->payload});
     }
@@ -152,8 +159,14 @@ PyCaravanGL_API Pipeline_draw(PyCaravanPipeline *self, [[maybe_unused]] PyObject
             return nullptr;
         }
 
-        cv_bind_program(cv_state, OpenGL, self->program);
-        cv_bind_vao(cv_state, OpenGL, self->vao);
+        // 1. Stage the state
+        cv_set_program(cv_state, self->program);
+        cv_set_vao(cv_state, self->vao);
+
+        // 2. Resolve bindings into driver calls
+        cv_resolve(cv_state, OpenGL);
+
+        // 3. Sync Render State (Diff checks)
         cv_sync_render_state(cv_state, OpenGL, &self->render_state);
 
         if (self->index_type != 0) {

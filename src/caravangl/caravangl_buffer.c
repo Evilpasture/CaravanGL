@@ -24,7 +24,7 @@ static int Buffer_clear(PyCaravanBuffer *self) {
 PyCaravanGL_Status Buffer_init(PyCaravanBuffer *self, PyObject *args, PyObject *kwds) {
     PyObject *mod = PyType_GetModule(Py_TYPE(self));
     auto state = get_caravan_state(mod);
-    int size = 0;
+    Py_ssize_t size = 0;
     PyObject *data = nullptr;
     uint32_t target = GL_ARRAY_BUFFER;
     uint32_t usage = GL_STATIC_DRAW;
@@ -44,17 +44,45 @@ PyCaravanGL_Status Buffer_init(PyCaravanBuffer *self, PyObject *args, PyObject *
         OpenGL->GenBuffers(1, &self->buf.id);
         OpenGL->BindBuffer(target, self->buf.id);
 
+        // 1. Resolve Data Pointer and Size
         const void *ptr = nullptr;
         Py_buffer view;
         if (data && data != Py_None) {
             if (PyObject_GetBuffer(data, &view, PyBUF_SIMPLE) == 0) {
                 ptr = view.buf;
+                // Auto-infer size if not provided
+                if (size <= 0) {
+                    size = (int)view.len;
+                }
             } else {
                 return -1;
             }
         }
 
-        OpenGL->BufferData(target, (GLsizeiptr)size, ptr, usage);
+        bool success = false;
+
+        // 2. Try High-Performance Path (OpenGL 4.4+ / Windows & Linux)
+#ifndef __APPLE__
+        if (OpenGL->BufferStorage != nullptr) {
+            // flags: allow glBufferSubData + Persistent Mapping + Coherent (no CPU flush needed)
+            GLbitfield flags = GL_DYNAMIC_STORAGE_BIT | GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT |
+                               GL_MAP_COHERENT_BIT;
+
+            OpenGL->BufferStorage(target, (GLsizeiptr)size, ptr, flags);
+            self->buf.is_immutable = true;
+            self->buf.is_persistent = true;
+            success = true;
+        }
+#endif
+
+        // 3. Fallback Path (OpenGL 3.3 / macOS / Legacy Hardware)
+        if (!success) {
+            OpenGL->BufferData(target, (GLsizeiptr)size, ptr, usage);
+            self->buf.is_immutable = false;
+            self->buf.is_persistent = false;
+        }
+
+        // 4. Cleanup and Metadata
         if (ptr) {
             PyBuffer_Release(&view);
         }
@@ -64,6 +92,53 @@ PyCaravanGL_Status Buffer_init(PyCaravanBuffer *self, PyObject *args, PyObject *
         self->buf.usage = usage;
     }
     return 0;
+}
+
+PyCaravanGL_API Buffer_map(PyCaravanBuffer *self, [[maybe_unused]] PyObject *args) {
+    // macOS Safety Check
+    if (!self->buf.is_persistent) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "Persistent Mapping is not supported on this platform (macOS/Old GL). "
+                        "Use .write() instead.");
+        return nullptr;
+    }
+
+    if (!self->buf.is_immutable) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "Only immutable buffers (Storage) can be persistently mapped.");
+        return nullptr;
+    }
+
+    WithActiveGL(OpenGL, cv_state, nullptr) {
+        OpenGL->BindBuffer(self->buf.target, self->buf.id);
+
+        // Map for Write, Persistent, and Coherent (No manual flushing needed)
+        void *ptr =
+            OpenGL->MapBufferRange(self->buf.target, 0, self->buf.size,
+                                   GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT);
+
+        if (!ptr) {
+            PyErr_SetString(PyExc_RuntimeError, "GPU rejected mapping request.");
+            return nullptr;
+        }
+
+        Py_buffer view;
+        view.buf = ptr;
+        view.obj = (PyObject *)self;
+        view.len = self->buf.size;
+        view.readonly = 0;
+        view.itemsize = 1;
+        view.format = "B";
+        view.ndim = 1;
+        self->map_shape[0] = (Py_ssize_t)self->buf.size;
+        view.shape = self->map_shape;
+        view.strides = &view.itemsize;
+        view.suboffsets = nullptr;
+        view.internal = nullptr;
+
+        return PyMemoryView_FromBuffer(&view);
+    }
+    return nullptr;
 }
 
 PyCaravanGL_API Buffer_write(PyCaravanBuffer *self, PyObject *const *args, Py_ssize_t nargs,
@@ -140,6 +215,7 @@ const PyType_Spec Buffer_spec = {
                   "Write data to buffer."},
                  {"bind_base", CARAVAN_CAST(Buffer_bind_base), METH_FASTCALL | METH_KEYWORDS,
                   "Bind as indexed resource."},
+                 {"map", (PyCFunction)Buffer_map, METH_NOARGS, "Map to buffer."},
                  {}}
 
             },

@@ -64,40 +64,37 @@ PyCaravanGL_API caravan_meth_context([[maybe_unused]] PyObject *mod,
 // --- Internal Inspection Helpers ---
 
 static inline PyObject *inspect_buffer(PyCaravanBuffer *buf) {
-    return FastBuild_Dict("type", "buffer", "id", (Py_ssize_t)buf->buf.id, "target",
-                          (Py_ssize_t)buf->buf.target, "size", (Py_ssize_t)buf->buf.size, "usage",
-                          (Py_ssize_t)buf->buf.usage);
+    return FastBuild_Dict(
+        "type", "buffer", "id", (Py_ssize_t)buf->buf.id, "target", (Py_ssize_t)buf->buf.target,
+        "size", (Py_ssize_t)buf->buf.size, "usage", (Py_ssize_t)buf->buf.usage,
+        // NEW: Export the capability flags
+        "is_immutable", (bool)buf->buf.is_immutable, "is_persistent", (bool)buf->buf.is_persistent);
 }
 
 static inline PyObject *inspect_pipeline(PyCaravanPipeline *pip) {
-    // 1. Snapshot of the Render State Machine
+    // We explicitly cast bitfield members to (bool) so that the
+    // FastBuild dispatcher creates Python Booleans instead of Integers.
     auto state_dict = FastBuild_Dict(
-        // -- Depth --
-        "depth_test", pip->render_state.depth_test_enabled, "depth_write",
-        pip->render_state.depth_write_mask, "depth_func", (Py_ssize_t)pip->render_state.depth_func,
+        // -- Booleans (Casts required for bitfields) --
+        "depth_test", (bool)pip->render_state.depth_test_enabled, "depth_write",
+        (bool)pip->render_state.depth_write_mask, "stencil_test",
+        (bool)pip->render_state.stencil_test_enabled, "blend",
+        (bool)pip->render_state.blend_enabled, "cull", (bool)pip->render_state.cull_face_enabled,
 
-        // -- Stencil --
-        "stencil_test", pip->render_state.stencil_test_enabled, "stencil_func",
+        // -- Enums (Remain as PyLong/Integers) --
+        "depth_func", (Py_ssize_t)pip->render_state.depth_func, "stencil_func",
         (Py_ssize_t)pip->render_state.stencil_func, "stencil_ref",
         (Py_ssize_t)pip->render_state.stencil_ref, "stencil_zpass",
-        (Py_ssize_t)pip->render_state.stencil_zpass_op,
-
-        // -- Blending --
-        "blend", pip->render_state.blend_enabled, "blend_src_rgb",
+        (Py_ssize_t)pip->render_state.stencil_zpass_op, "blend_src_rgb",
         (Py_ssize_t)pip->render_state.blend_src_rgb, "blend_dst_rgb",
-        (Py_ssize_t)pip->render_state.blend_dst_rgb,
-
-        // -- Culling --
-        "cull", pip->render_state.cull_face_enabled, "cull_mode",
+        (Py_ssize_t)pip->render_state.blend_dst_rgb, "cull_mode",
         (Py_ssize_t)pip->render_state.cull_face_mode);
 
-    // 2. Snapshot of the Draw Call Parameters
     auto params_dict = FastBuild_Dict("vertex_count", (Py_ssize_t)pip->params.vertex_count,
                                       "instance_count", (Py_ssize_t)pip->params.instance_count,
                                       "first_vertex", (Py_ssize_t)pip->params.first_vertex,
                                       "base_instance", (Py_ssize_t)pip->params.base_instance);
 
-    // 3. Main Pipeline Object
     return FastBuild_Dict("type", "pipeline", "program", (Py_ssize_t)pip->program, "vao",
                           (Py_ssize_t)pip->vao, "topology", (Py_ssize_t)pip->topology, "index_type",
                           (Py_ssize_t)pip->index_type, "render_state", state_dict, "draw_params",
@@ -165,6 +162,7 @@ PyCaravanGL_API caravan_meth_clear(PyObject *mod, PyObject *const *args, Py_ssiz
         return nullptr;
     }
     WithActiveGL(OpenGL, cv_state, nullptr) {
+        cv_resolve(cv_state, OpenGL); // Resolve FBO/Viewport before clearing
         OpenGL->Clear(mask);
     }
     Py_RETURN_NONE;
@@ -190,6 +188,7 @@ PyCaravanGL_API caravan_meth_clear_color(PyObject *mod, PyObject *const *args, P
 
     // Use Active Context to perform the GL call
     WithActiveGL(OpenGL, cv_state, nullptr) {
+        cv_resolve(cv_state, OpenGL); // Resolve FBO/Viewport before clearing
         const GLfloat color[] = {red, green, blue, alpha};
         OpenGL->ClearBufferfv(GL_COLOR, 0, color);
     }
@@ -199,10 +198,8 @@ PyCaravanGL_API caravan_meth_clear_color(PyObject *mod, PyObject *const *args, P
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 PyCaravanGL_API caravan_bind_default_framebuffer([[maybe_unused]] PyObject *mod,
                                                  [[maybe_unused]] PyObject *args) {
-    // No parsing needed here, just context switching
     WithActiveGL(OpenGL, cv_state, nullptr) {
-        // The helpers in state.h must now accept (ctx, gl, id)
-        cv_bind_fbo_combined(cv_state, OpenGL, 0);
+        cv_set_fbo_combined(cv_state, 0); // Lazy bind
     }
     Py_RETURN_NONE;
 }
@@ -224,8 +221,9 @@ PyCaravanGL_API caravan_viewport(PyObject *mod, PyObject *const *args, Py_ssize_
 
     // WithActiveGL automatically extracts the correct context for this thread
     WithActiveGL(OpenGL, cv_state, nullptr) {
-        cv_bind_viewport(cv_state, OpenGL,
-                         &(CaravanRect){.x = x, .y = y, .width = width, .height = height});
+        cv_set_viewport(
+            cv_state,
+            &(CaravanRect){.x = x, .y = y, .width = width, .height = height}); // Lazy bind
     }
     Py_RETURN_NONE;
 }

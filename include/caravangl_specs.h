@@ -16,6 +16,7 @@ typedef struct CaravanBuffer {
     GLsizeiptr size;   // Total size in bytes
     GLenum usage;      // GL_STATIC_DRAW, GL_DYNAMIC_STORAGE_BIT, etc.
     bool is_immutable; // Was this created with glBufferStorage?
+    bool is_persistent; // Track if we can map this persistently
 } CaravanBuffer;
 
 /**
@@ -96,35 +97,63 @@ typedef struct CaravanTextureBinding {
 } CaravanTextureBinding;
 
 // Struct to track render pipeline state
-typedef struct CaravanRenderState {
-    bool cull_face_enabled;
-    GLenum cull_face_mode;
-    GLenum front_face;
+// Alignment 64 = Standard CPU Cache Line
+static constexpr size_t CaravanRenderState_Alignment = 64;
 
-    // Depth
-    bool depth_test_enabled;
-    GLenum depth_func;
-    bool depth_write_mask;
+typedef struct [[gnu::aligned(CaravanRenderState_Alignment)]] CaravanRenderState {
+    union {
+        struct {
+            // 16 Enums/Ints (64 bytes = Exactly 1 Cache Line)
+            GLenum cull_face_mode;
+            GLenum front_face;
+            GLenum depth_func;
+            GLenum blend_src_rgb;
+            GLenum blend_dst_rgb;
+            GLenum blend_src_alpha;
+            GLenum blend_dst_alpha;
+            GLenum blend_eq_rgb;
+            GLenum blend_eq_alpha;
+            GLenum stencil_func;
+            GLint  stencil_ref;
+            GLuint stencil_read_mask;
+            GLuint stencil_write_mask;
+            GLenum stencil_fail_op;
+            GLenum stencil_zfail_op;
+            GLenum stencil_zpass_op;
 
-    // Blend
-    bool blend_enabled;
-    GLenum blend_src_rgb, blend_dst_rgb;
-    GLenum blend_src_alpha, blend_dst_alpha;
-    GLenum blend_eq_rgb, blend_eq_alpha;
+            // Bitfield for booleans (4 bytes)
+            uint32_t cull_face_enabled : 1;
+            uint32_t depth_test_enabled : 1;
+            uint32_t depth_write_mask : 1;
+            uint32_t blend_enabled : 1;
+            uint32_t stencil_test_enabled : 1;
+            uint32_t _bitfield_pad : 27;
 
-    // Stencil (NEW)
-    bool stencil_test_enabled;
-    GLenum stencil_func;
-    GLint stencil_ref;
-    GLuint stencil_read_mask;
-    GLuint stencil_write_mask;
-    GLenum stencil_fail_op;
-    GLenum stencil_zfail_op;
-    GLenum stencil_zpass_op;
+            // Explicit padding to reach 128 bytes (2 Cache Lines)
+            // 64 (enums) + 4 (bitfield) + 60 (padding) = 128
+            uint32_t _extra_padding[15];
+        };
+        // Array for linter-safe block comparison
+        // 128 bytes / 4 = 32 elements
+        uint32_t data[32]; 
+    };
 } CaravanRenderState;
+
+static_assert(sizeof(CaravanRenderState) == 128, 
+              "CaravanRenderState must be exactly 128 bytes (2 cache lines).");
+
+
+typedef enum : uint32_t {
+    CV_DIRTY_PROGRAM  = 1U << 0U,
+    CV_DIRTY_VAO      = 1U << 1U,
+    CV_DIRTY_FBO_DRAW = 1U << 2U,
+    CV_DIRTY_FBO_READ = 1U << 3U,
+    CV_DIRTY_VIEWPORT = 1U << 4U
+} CaravanDirtyFlags;
 
 typedef struct CaravanContext {
     MagMutex state_lock;
+    uint32_t dirty_flags;
     struct {
         GLuint vao;
         GLuint program;

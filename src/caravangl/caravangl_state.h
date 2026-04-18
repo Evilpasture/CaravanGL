@@ -1,73 +1,104 @@
-// --- START OF FILE caravangl_state.h ---
 #pragma once
 #include "caravangl_module.h"
 #include "caravangl_specs.h"
 
 // -----------------------------------------------------------------------------
-// Core Bindings (VAO, FBO, Program)
+// Dirty State Setters (Zero Driver Overhead)
 // -----------------------------------------------------------------------------
 
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_bind_program(CaravanContext *ctx, const CaravanGLTable *const OpenGL,
-                                   GLuint program) {
+static inline void cv_set_program(CaravanContext *ctx, GLuint program) {
     if (ctx->bound.program != program) [[clang::unlikely]] {
         ctx->bound.program = program;
-        OpenGL->UseProgram(program);
+        ctx->dirty_flags |= CV_DIRTY_PROGRAM;
     }
 }
 
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_bind_vao(CaravanContext *ctx, const CaravanGLTable *const OpenGL,
-                               GLuint vao) {
+static inline void cv_set_vao(CaravanContext *ctx, GLuint vao) {
     if (ctx->bound.vao != vao) [[clang::unlikely]] {
         ctx->bound.vao = vao;
-        OpenGL->BindVertexArray(vao);
+        ctx->dirty_flags |= CV_DIRTY_VAO;
     }
 }
 
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_bind_fbo_draw(CaravanContext *ctx, const CaravanGLTable *const OpenGL,
-                                    GLuint fbo) {
+static inline void cv_set_fbo_draw(CaravanContext *ctx, GLuint fbo) {
     if (ctx->bound.fbo_draw != fbo) [[clang::unlikely]] {
-        OpenGL->BindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
         ctx->bound.fbo_draw = fbo;
+        ctx->dirty_flags |= CV_DIRTY_FBO_DRAW;
     }
 }
 
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_bind_fbo_read(CaravanContext *ctx, const CaravanGLTable *const OpenGL,
-                                    GLuint fbo) {
+static inline void cv_set_fbo_read(CaravanContext *ctx, GLuint fbo) {
     if (ctx->bound.fbo_read != fbo) [[clang::unlikely]] {
-        OpenGL->BindFramebuffer(GL_READ_FRAMEBUFFER, fbo);
         ctx->bound.fbo_read = fbo;
+        ctx->dirty_flags |= CV_DIRTY_FBO_READ;
     }
 }
 
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_bind_fbo_combined(CaravanContext *ctx, const CaravanGLTable *const OpenGL,
-                                        GLuint fbo) {
+static inline void cv_set_fbo_combined(CaravanContext *ctx, GLuint fbo) {
     if (ctx->bound.fbo_draw != fbo || ctx->bound.fbo_read != fbo) [[clang::unlikely]] {
-        OpenGL->BindFramebuffer(GL_FRAMEBUFFER, fbo);
         ctx->bound.fbo_draw = fbo;
         ctx->bound.fbo_read = fbo;
+        ctx->dirty_flags |= (CV_DIRTY_FBO_DRAW | CV_DIRTY_FBO_READ);
     }
 }
 
 [[gnu::always_inline, gnu::hot]]
-static inline void cv_bind_viewport(CaravanContext *ctx, const CaravanGLTable *const OpenGL,
-                                    const CaravanRect *viewport) {
+static inline void cv_set_viewport(CaravanContext *ctx, const CaravanRect *viewport) {
     CaravanRect *cview = &ctx->viewport;
     if (viewport->x != cview->x || viewport->y != cview->y || viewport->width != cview->width ||
         viewport->height != cview->height) [[clang::unlikely]] {
-        OpenGL->Viewport(viewport->x, viewport->y, viewport->width, viewport->height);
         *cview = *viewport;
+        ctx->dirty_flags |= CV_DIRTY_VIEWPORT;
     }
 }
 
 // -----------------------------------------------------------------------------
-// Resource Bindings (UBO, SSBO, Textures)
+// The Resolver (The single branching hot-path)
 // -----------------------------------------------------------------------------
 
+[[gnu::always_inline, gnu::hot]]
+static inline void cv_resolve(CaravanContext *ctx, const CaravanGLTable *const OpenGL) {
+    uint32_t flags = ctx->dirty_flags;
+    if (!flags) [[clang::likely]] {
+        return;
+    }
+
+    if (flags & CV_DIRTY_PROGRAM) {
+        OpenGL->UseProgram(ctx->bound.program);
+    }
+
+    if (flags & CV_DIRTY_VAO) {
+        OpenGL->BindVertexArray(ctx->bound.vao);
+    }
+
+    if ((flags & CV_DIRTY_FBO_DRAW) && (flags & CV_DIRTY_FBO_READ) &&
+        (ctx->bound.fbo_draw == ctx->bound.fbo_read)) {
+        OpenGL->BindFramebuffer(GL_FRAMEBUFFER, ctx->bound.fbo_draw);
+    } else {
+        if (flags & CV_DIRTY_FBO_DRAW) {
+            OpenGL->BindFramebuffer(GL_DRAW_FRAMEBUFFER, ctx->bound.fbo_draw);
+        }
+        if (flags & CV_DIRTY_FBO_READ) {
+            OpenGL->BindFramebuffer(GL_READ_FRAMEBUFFER, ctx->bound.fbo_read);
+        }
+    }
+
+    if (flags & CV_DIRTY_VIEWPORT) {
+        OpenGL->Viewport(ctx->viewport.x, ctx->viewport.y, ctx->viewport.width,
+                         ctx->viewport.height);
+    }
+
+    ctx->dirty_flags = 0;
+}
+
+// -----------------------------------------------------------------------------
+// Resource Bindings (Kept immediate because they require indexing)
+// -----------------------------------------------------------------------------
 [[gnu::always_inline, gnu::hot]]
 static inline void cv_bind_ubo_range(CaravanContext *ctx, const CaravanGLTable *const OpenGL,
                                      GLuint index, GLuint buffer, GLintptr offset,
@@ -121,40 +152,35 @@ static inline void cv_bind_texture(CaravanContext *ctx, const CaravanGLTable *co
 }
 
 // -----------------------------------------------------------------------------
-// Render State Binders (Depth, Blend, Cull)
+// Render State Binders (Differential Checks Maintained)
 // -----------------------------------------------------------------------------
+// --- HELPER SUB-FUNCTIONS ---
 
-[[gnu::always_inline, gnu::hot]]
-static inline void cv_sync_render_state(CaravanContext *ctx, const CaravanGLTable *const OpenGL,
-                                        const CaravanRenderState *req) {
-    CaravanRenderState *curr = &ctx->bound.render;
-
-    // 1. Depth State Sync
+static inline void cv_sync_depth(const CaravanGLTable *const OpenGL, CaravanRenderState *curr,
+                                 const CaravanRenderState *req) {
     if (curr->depth_test_enabled != req->depth_test_enabled) {
         (int)req->depth_test_enabled ? OpenGL->Enable(GL_DEPTH_TEST)
                                      : OpenGL->Disable(GL_DEPTH_TEST);
         curr->depth_test_enabled = req->depth_test_enabled;
     }
-
-    if (req->depth_test_enabled) {
-        if (curr->depth_func != req->depth_func) {
-            OpenGL->DepthFunc(req->depth_func);
-            curr->depth_func = req->depth_func;
-        }
-        if (curr->depth_write_mask != req->depth_write_mask) {
-            OpenGL->DepthMask((GLboolean)req->depth_write_mask ? GL_TRUE : GL_FALSE);
-            curr->depth_write_mask = req->depth_write_mask;
-        }
+    if ((int)req->depth_test_enabled &&
+        (curr->depth_func != req->depth_func || curr->depth_write_mask != req->depth_write_mask)) {
+        OpenGL->DepthFunc(req->depth_func);
+        OpenGL->DepthMask((int)req->depth_write_mask ? GL_TRUE : GL_FALSE);
+        curr->depth_func = req->depth_func;
+        curr->depth_write_mask = req->depth_write_mask;
     }
+}
 
-    // 2. Stencil State Sync
+static inline void cv_sync_stencil(const CaravanGLTable *const OpenGL, CaravanRenderState *curr,
+                                   const CaravanRenderState *req) {
     if (curr->stencil_test_enabled != req->stencil_test_enabled) {
         (int)req->stencil_test_enabled ? OpenGL->Enable(GL_STENCIL_TEST)
                                        : OpenGL->Disable(GL_STENCIL_TEST);
         curr->stencil_test_enabled = req->stencil_test_enabled;
     }
-
     if (req->stencil_test_enabled) {
+        // Compare all stencil params as a block (Func, Ref, ReadMask)
         if (curr->stencil_func != req->stencil_func || curr->stencil_ref != req->stencil_ref ||
             curr->stencil_read_mask != req->stencil_read_mask) {
             OpenGL->StencilFunc(req->stencil_func, req->stencil_ref, req->stencil_read_mask);
@@ -166,6 +192,7 @@ static inline void cv_sync_render_state(CaravanContext *ctx, const CaravanGLTabl
             OpenGL->StencilMask(req->stencil_write_mask);
             curr->stencil_write_mask = req->stencil_write_mask;
         }
+        // Compare all Ops as a block
         if (curr->stencil_fail_op != req->stencil_fail_op ||
             curr->stencil_zfail_op != req->stencil_zfail_op ||
             curr->stencil_zpass_op != req->stencil_zpass_op) {
@@ -175,24 +202,25 @@ static inline void cv_sync_render_state(CaravanContext *ctx, const CaravanGLTabl
             curr->stencil_zpass_op = req->stencil_zpass_op;
         }
     }
+}
 
-    // 3. Face Culling Sync
+static inline void cv_sync_cull(const CaravanGLTable *const OpenGL, CaravanRenderState *curr,
+                                const CaravanRenderState *req) {
     if (curr->cull_face_enabled != req->cull_face_enabled) {
         (int)req->cull_face_enabled ? OpenGL->Enable(GL_CULL_FACE) : OpenGL->Disable(GL_CULL_FACE);
         curr->cull_face_enabled = req->cull_face_enabled;
     }
-    if (req->cull_face_enabled) {
-        if (curr->cull_face_mode != req->cull_face_mode) {
-            OpenGL->CullFace(req->cull_face_mode);
-            curr->cull_face_mode = req->cull_face_mode;
-        }
-        if (curr->front_face != req->front_face) {
-            OpenGL->FrontFace(req->front_face);
-            curr->front_face = req->front_face;
-        }
+    if ((int)req->cull_face_enabled &&
+        (curr->cull_face_mode != req->cull_face_mode || curr->front_face != req->front_face)) {
+        OpenGL->CullFace(req->cull_face_mode);
+        OpenGL->FrontFace(req->front_face);
+        curr->cull_face_mode = req->cull_face_mode;
+        curr->front_face = req->front_face;
     }
+}
 
-    // 4. Blending Sync
+static inline void cv_sync_blend(const CaravanGLTable *const OpenGL, CaravanRenderState *curr,
+                                 const CaravanRenderState *req) {
     if (curr->blend_enabled != req->blend_enabled) {
         (int)req->blend_enabled ? OpenGL->Enable(GL_BLEND) : OpenGL->Disable(GL_BLEND);
         curr->blend_enabled = req->blend_enabled;
@@ -218,35 +246,33 @@ static inline void cv_sync_render_state(CaravanContext *ctx, const CaravanGLTabl
     }
 }
 
-// -----------------------------------------------------------------------------
-// Synchronization
-// -----------------------------------------------------------------------------
+// --- THE MAIN DISPATCHER ---
 
-[[gnu::always_inline]]
-static inline void cv_wait_for_last_work(CaravanContext *ctx, const CaravanGLTable *const OpenGL) {
-    if (ctx->bound.last_work_fence) {
-        // We capture the result to satisfy [[nodiscard]]
-        [[maybe_unused]] GLenum status = OpenGL->ClientWaitSync(
-            ctx->bound.last_work_fence, GL_SYNC_FLUSH_COMMANDS_BIT, GL_TIMEOUT_IGNORED);
-
-        // In Debug mode, we verify the wait didn't fail (e.g., due to context loss)
-#ifndef NDEBUG
-        if (status == GL_WAIT_FAILED) {
-            // Raw fprintf because we might not hold the GIL here
-            // NOLINTNEXTLINE
-            (void)fprintf(stderr, "[CaravanGL] Warning: glClientWaitSync failed.\n");
+[[gnu::always_inline, gnu::hot]]
+static inline bool cv_render_state_equals(const CaravanRenderState *FirstRenderState,
+                                          const CaravanRenderState *SecondRenderState) {
+#pragma unroll
+    for (int i = 0; i < 32; i++) {
+        if (FirstRenderState->data[i] != SecondRenderState->data[i]) {
+            return false;
         }
-#endif
-
-        OpenGL->DeleteSync(ctx->bound.last_work_fence);
-        ctx->bound.last_work_fence = nullptr;
     }
+    return true;
 }
 
-[[gnu::always_inline]]
-static inline void cv_insert_work_fence(CaravanContext *ctx, const CaravanGLTable *const OpenGL) {
-    if (ctx->bound.last_work_fence) {
-        OpenGL->DeleteSync(ctx->bound.last_work_fence);
+[[gnu::always_inline, gnu::hot]]
+static inline void cv_sync_render_state(CaravanContext *ctx, const CaravanGLTable *const OpenGL,
+                                        const CaravanRenderState *req) {
+    CaravanRenderState *curr = &ctx->bound.render;
+
+    // 1. FAST PATH: Integer block comparison (No memcmp, no linter warning)
+    if (cv_render_state_equals(curr, req)) [[clang::likely]] {
+        return;
     }
-    ctx->bound.last_work_fence = OpenGL->FenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+
+    // 2. SLOW PATH: Differential Update
+    cv_sync_depth(OpenGL, curr, req);
+    cv_sync_stencil(OpenGL, curr, req);
+    cv_sync_cull(OpenGL, curr, req);
+    cv_sync_blend(OpenGL, curr, req);
 }

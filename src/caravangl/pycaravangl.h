@@ -82,9 +82,10 @@ typedef struct PyCaravanContext {
 } PyCaravanContext;
 
 typedef struct {
-    PyObject_HEAD PyCaravanContext *owning_context; // NEW!
+    PyObject_HEAD PyCaravanContext *owning_context;
     CaravanBuffer buf;
     PyObject *weakreflist;
+    Py_ssize_t map_shape[1];
 } PyCaravanBuffer;
 
 typedef struct {

@@ -7,7 +7,8 @@
 // -----------------------------------------------------------------------------
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-PyCaravanGL_Status Framebuffer_init(PyCaravanFramebuffer *self, PyObject *args, PyObject *kwds) {
+PyCaravanGL_Status Framebuffer_init(PyCaravanFramebuffer *self, [[maybe_unused]] PyObject *args,
+                                    [[maybe_unused]] PyObject *kwds) {
     // No parsing needed for init, just context activation
     WithActiveGL(OpenGL, cv_state, -1) {
         self->owning_context = (PyCaravanContext *)Py_NewRef(_cv_ctx);
@@ -63,7 +64,9 @@ PyCaravanGL_API Framebuffer_attach_texture(PyCaravanFramebuffer *self, PyObject 
             PyErr_SetString(PyExc_RuntimeError, "Framebuffer context mismatch.");
             return nullptr;
         }
-        cv_bind_fbo_combined(cv_state, OpenGL, self->fbo.id);
+        cv_set_fbo_combined(cv_state, self->fbo.id);
+        cv_resolve(cv_state, OpenGL); // Must resolve before calling FramebufferTexture2D!
+
         OpenGL->FramebufferTexture2D(GL_FRAMEBUFFER, attachment, tex->tex.target, tex->tex.id,
                                      level);
 
@@ -117,7 +120,8 @@ PyCaravanGL_API Framebuffer_check_status(PyCaravanFramebuffer *self,
     }
 
     WithActiveGL(OpenGL, cv_state, nullptr) {
-        cv_bind_fbo_combined(cv_state, OpenGL, self->fbo.id);
+        cv_set_fbo_combined(cv_state, self->fbo.id);
+        cv_resolve(cv_state, OpenGL); // Must resolve before checking!
         GLenum status = OpenGL->CheckFramebufferStatus(GL_FRAMEBUFFER);
         if (status != GL_FRAMEBUFFER_COMPLETE) {
             PyErr_Format(PyExc_RuntimeError, "Framebuffer not complete! GL Status Code: 0x%X",
@@ -131,7 +135,8 @@ PyCaravanGL_API Framebuffer_check_status(PyCaravanFramebuffer *self,
 PyCaravanGL_API Framebuffer_bind(PyCaravanFramebuffer *self, [[maybe_unused]] PyObject *args) {
     [[maybe_unused]] PyObject *mod = PyType_GetModule(Py_TYPE(self));
     WithActiveGL(OpenGL, cv_state, nullptr) {
-        cv_bind_fbo_combined(cv_state, OpenGL, self->fbo.id);
+        cv_set_fbo_combined(cv_state, self->fbo.id);
+        // NO RESOLVE NEEDED HERE! It will be lazily resolved on the next Draw or Clear call.
     }
     Py_RETURN_NONE;
 }
