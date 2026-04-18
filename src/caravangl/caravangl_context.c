@@ -57,6 +57,7 @@ static void query_capabilities(PyCaravanContext *self) {
 #endif
 }
 
+// NOLINTNEXTLINE(readability-identifier-length)
 void cv_enqueue_garbage(size_t *count, GLuint *array, GLuint id) {
     if (id == 0) {
         return;

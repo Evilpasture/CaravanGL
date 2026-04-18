@@ -13,10 +13,23 @@ authors = [{ name = "Evilpasture" }]
 [tool.scikit-build]
 build.verbose = true
 cmake.args = ["-GNinja"]
-
-# This tells scikit-build-core that our module "caravangl" 
-# is located in the "src" directory (or will be built there)
 wheel.packages = ["src/caravangl"]
+wheel.exclude = ["src/*.c", "src/*.h", "cmake/*", "tests/*"]
 
-[tool.scikit-build.editable]
-mode = "redirect"
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+# Enable standard vanguards: Pyflakes (F), Charset-normalizer (C), 
+# Isort (I), and the ever-important Bugbear (B)
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+lines-after-imports = 2
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
