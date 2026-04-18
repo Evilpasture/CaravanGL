@@ -5,8 +5,11 @@ import glfw
 import caravangl
 import ctypes
 import sys
+import gc
+import time
 
 # --- Boilerplate Setup ---
+
 class GLLoader:
     def load_opengl_function(self, name: str) -> int:
         ptr = glfw.get_proc_address(name)
@@ -26,9 +29,11 @@ def ctx():
         pytest.skip("GLFW init failed")
     
     apply_hints()
-    win = glfw.create_window(1, 1, "Robustness Hidden", None, None)
-    
-    # MANDATORY FOR WINDOWS: Context must be current BEFORE Context() init
+    win = glfw.create_window(1, 1, "Robustness Main", None, None)
+    if not win:
+        glfw.terminate()
+        pytest.skip("Window creation failed")
+        
     glfw.make_context_current(win)
     
     c = caravangl.Context(
@@ -37,104 +42,166 @@ def ctx():
         os_release_cb=lambda: glfw.make_context_current(None)
     )
     c.make_current()
+    
     yield c
     
-    glfw.destroy_window(win)
+    # --- NUCLEAR FIXTURE CLEANUP ---
+    glfw.make_context_current(None)
+    
+    # 1. Break the closure links inside the Context object
+    c.os_make_current_cb = None
+    c.os_release_cb = None
+    
+    # 2. Explicitly destroy the window while GLFW is still active
+    if win:
+        glfw.destroy_window(win)
+        win = None 
+        
+    # 3. Explicitly delete the context reference
+    del c
+    
+    # 4. Force GC and process OS events to ensure all objects are dead
+    gc.collect()
+    gc.collect() # Handle potential cycles
+    glfw.poll_events()
+    time.sleep(0.05) # Give Cocoa/WGL a moment to finish window cleanup
+    
+    # 5. Only now is it safe to terminate the library
     glfw.terminate()
 
 # --- SUITE 1: ERROR HANDLING & TYPE SAFETY ---
 
 def test_buffer_invalid_args(ctx):
+    """Verify C-side FastParse rejects garbage input."""
     with ctx:
         with pytest.raises(TypeError):
             caravangl.Buffer(size="one gigabyte") # type: ignore
+        
         buf = caravangl.Buffer(size=1024)
         with pytest.raises(TypeError):
             buf.write(data=12345) # type: ignore
 
+# --- SUITE 2: ISOLATION ENFORCEMENT ---
+
 def test_vao_isolation_enforcement(ctx):
+    """Verify that C code blocks using a VAO in the wrong context."""
     with ctx:
         vao_main = caravangl.VertexArray()
         vbo = caravangl.Buffer(size=1024)
 
+    # 1. Create worker window on main thread (macOS requirement)
     main_win = glfw.get_current_context()
     apply_hints()
     worker_win = glfw.create_window(1, 1, "Worker", None, main_win)
     
-    # 1. Make OS context current FIRST
     glfw.make_context_current(worker_win)
-    
-    # 2. Now init the CaravanGL object (so loader finds functions)
     ctx_worker = caravangl.Context(
         loader=GLLoader(),
         os_make_current_cb=lambda: glfw.make_context_current(worker_win),
         os_release_cb=lambda: glfw.make_context_current(None)
     )
+    glfw.make_context_current(None)
 
-    with ctx_worker:
-        with pytest.raises(RuntimeError) as exc:
-            vao_main.bind_attribute(0, vbo, 3, caravangl.FLOAT)
-        msg = str(exc.value).lower()
-        assert "creator" in msg or "mismatch" in msg
-    
-    glfw.destroy_window(worker_win)
-    # Restore main
-    ctx.make_current()
+    try:
+        # 2. Try to use vao_main inside ctx_worker
+        with ctx_worker:
+            with pytest.raises(RuntimeError) as exc:
+                # This should trigger the C check
+                vao_main.bind_attribute(0, vbo, 3, caravangl.FLOAT)
+            
+            msg = str(exc.value).lower()
+            assert "creator" in msg or "mismatch" in msg
+            
+    finally:
+        ctx_worker.os_make_current_cb = None
+        ctx_worker.os_release_cb = None
+        glfw.make_context_current(None)
+        del ctx_worker
+        if worker_win:
+            glfw.destroy_window(worker_win)
+        gc.collect()
+        gc.collect()
+        glfw.poll_events()
+        ctx.make_current()
 
-# --- SUITE 2: MEMORY & RESOURCE STRESS ---
+# --- SUITE 3: MEMORY & RESOURCE STRESS ---
 
 def test_massive_uniform_batch(ctx):
+    """Test the limits of the zero-copy UniformBatch."""
     batch = caravangl.UniformBatch(max_bindings=1000, max_bytes=1024*1024)
     for i in range(1000):
         batch.add(caravangl.UF_1F, location=i, count=1, size=4)
+    
     view = batch.data
     view[1024*1024 - 1] = 255
     assert view[1024*1024 - 1] == 255
 
 def test_texture_reallocation_churn(ctx):
+    """Verify that repeatedly uploading different sizes to one texture is stable."""
     with ctx:
         tex = caravangl.Texture()
-        for w, h in [(64,64), (512, 512), (2, 2)]:
+        sizes = [(64,64), (1024, 1024), (128, 128), (2, 2)]
+        
+        for w, h in sizes:
             tex.upload(w, h, caravangl.RGBA8, caravangl.RGBA, caravangl.UNSIGNED_BYTE, None)
             info = caravangl.inspect(tex)
             assert info["width"] == w
+            assert info["height"] == h
 
-# --- SUITE 3: ASYNC SHARED RESOURCE INTEGRITY ---
+# --- SUITE 4: ASYNC SHARED RESOURCE INTEGRITY ---
 
 def test_shared_buffer_multithreaded_write(ctx):
+    """Verify thread-safety of writing to a shared buffer from multiple threads."""
     with ctx:
         shared_vbo = caravangl.Buffer(size=4096)
     
     main_win = glfw.get_current_context()
+    worker_resources = []
     
-    def worker():
+    # 1. Pre-create on main thread
+    for i in range(4):
         apply_hints()
-        win = glfw.create_window(1, 1, "W", None, main_win)
-        
-        # Windows Requirement: Bind OS context before CaravanGL loader runs
+        win = glfw.create_window(1, 1, f"W{i}", None, main_win)
         glfw.make_context_current(win)
-        
         c = caravangl.Context(
             loader=GLLoader(), 
-            os_make_current_cb=lambda: glfw.make_context_current(win),
+            os_make_current_cb=lambda w=win: glfw.make_context_current(w),
             os_release_cb=lambda: glfw.make_context_current(None)
         )
-        with c:
+        worker_resources.append((win, c))
+    
+    glfw.make_context_current(None)
+
+    def worker_thread_entry(context):
+        # The 'with context' handles the make_current and release automatically
+        with context:
             data = np.zeros(1024, dtype=np.uint8).tobytes()
             for _ in range(50):
                 shared_vbo.write(data)
-        glfw.destroy_window(win)
 
-    threads = [threading.Thread(target=worker) for _ in range(4)]
+    threads = [threading.Thread(target=worker_thread_entry, args=(res[1],)) 
+               for res in worker_resources]
+    
     for t in threads: t.start()
     for t in threads: t.join()
+    
+    # 2. Clean up resources
+    for win, c in worker_resources:
+        c.os_make_current_cb = None
+        c.os_release_cb = None
+        del c
+        glfw.destroy_window(win)
+        
+    gc.collect()
+    gc.collect()
+    glfw.poll_events()
     
     ctx.make_current()
     assert True
 
-# --- SUITE 4: STATE SHADOWING VALIDATION ---
-
+# --- SUITE 5: STATE SHADOWING VALIDATION ---
 def test_viewport_shadowing(ctx):
+    """Verify isolated shadow states."""
     main_win = glfw.get_current_context()
     apply_hints()
     worker_win = glfw.create_window(1, 1, "W", None, main_win)
@@ -145,15 +212,38 @@ def test_viewport_shadowing(ctx):
         os_make_current_cb=lambda: glfw.make_context_current(worker_win),
         os_release_cb=lambda: glfw.make_context_current(None)
     )
+    glfw.make_context_current(None)
 
-    with ctx:
-        caravangl.viewport(0, 0, 800, 600)
-    
-    with ctx_worker:
-        caravangl.viewport(0, 0, 100, 100)
-        assert caravangl.context()["viewport"] == (0, 0, 100, 100)
+    try:
+        # 1. Set main viewport
+        with ctx:
+            caravangl.viewport(0, 0, 800, 600)
+        
+        # 2. Switch context and set different viewport
+        with ctx_worker:
+            caravangl.viewport(0, 0, 100, 100)
+            vp_worker = caravangl.context()["viewport"]
+            assert vp_worker == (0, 0, 100, 100)
 
-    with ctx:
-        assert caravangl.context()["viewport"] == (0, 0, 800, 600)
-    
-    glfw.destroy_window(worker_win)
+        # 3. Check main context again (shadow state should be preserved)
+        with ctx:
+            vp_main = caravangl.context()["viewport"]
+            assert vp_main == (0, 0, 800, 600)
+            
+    finally:
+        # Cleanup
+        ctx_worker.os_make_current_cb = None
+        ctx_worker.os_release_cb = None
+        glfw.make_context_current(None)
+        
+        del ctx_worker
+        if worker_win:
+            glfw.destroy_window(worker_win)
+
+            
+        for _ in range(3): # Sometimes cycles need multiple passes
+            gc.collect()
+        glfw.poll_events()
+        time.sleep(0.01)
+        
+        ctx.make_current()
