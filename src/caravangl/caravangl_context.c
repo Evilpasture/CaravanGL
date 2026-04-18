@@ -229,8 +229,16 @@ PyCaravanGL_Status Context_init(PyCaravanContext *self, PyObject *args, PyObject
 
 PyCaravanGL_Slot Context_dealloc(PyCaravanContext *self) {
     PyTypeObject *type = Py_TYPE(self);
-    Py_XDECREF(self->os_make_current_cb);
-    Py_XDECREF(self->os_release_cb);
+
+    // 1. Tell the GC to stop looking at this object
+    PyObject_GC_UnTrack(self);
+
+    // 2. Safely clear the Python references
+    // Use Py_CLEAR to null the pointers before decref-ing
+    Py_CLEAR(self->os_make_current_cb);
+    Py_CLEAR(self->os_release_cb);
+
+    // 3. Standard cleanup
     type->tp_free((PyObject *)self);
     Py_DECREF(type);
 }
@@ -245,22 +253,37 @@ PyCaravanGL_Status Context_clear(PyCaravanContext *self) {
     return 0;
 }
 
-// Getter for the callback
-PyCaravanGL_API Context_get_callback(PyCaravanContext *self, [[maybe_unused]] void *closure) {
+// Getter for os_make_current_cb
+PyCaravanGL_API Context_get_make_current_cb(PyCaravanContext *self,
+                                            [[maybe_unused]] void *closure) {
     return Py_NewRef(self->os_make_current_cb);
 }
 
-// Setter for the callback
-PyCaravanGL_Status Context_set_callback(PyCaravanContext *self, PyObject *value,
-                                        [[maybe_unused]] void *closure) {
+// Setter for os_make_current_cb
+PyCaravanGL_Status Context_set_make_current_cb(PyCaravanContext *self, PyObject *value,
+                                               [[maybe_unused]] void *closure) {
     if (value == nullptr) {
-        PyErr_SetString(PyExc_TypeError, "Cannot delete the os_make_current_cb attribute");
+        PyErr_SetString(PyExc_TypeError, "Cannot delete os_make_current_cb");
         return -1;
     }
-    PyObject *old = self->os_make_current_cb;
-    self->os_make_current_cb = Py_NewRef(value);
-    Py_XDECREF(old);
-    return 0; // Success
+    Py_XSETREF(self->os_make_current_cb, Py_NewRef(value));
+    return 0;
+}
+
+// NEW: Getter for os_release_cb
+PyCaravanGL_API Context_get_release_cb(PyCaravanContext *self, [[maybe_unused]] void *closure) {
+    return Py_NewRef(self->os_release_cb);
+}
+
+// NEW: Setter for os_release_cb
+PyCaravanGL_Status Context_set_release_cb(PyCaravanContext *self, PyObject *value,
+                                          [[maybe_unused]] void *closure) {
+    if (value == nullptr) {
+        PyErr_SetString(PyExc_TypeError, "Cannot delete os_release_cb");
+        return -1;
+    }
+    Py_XSETREF(self->os_release_cb, Py_NewRef(value));
+    return 0;
 }
 
 // NOLINTNEXTLINE(misc-use-internal-linkage)
@@ -276,8 +299,10 @@ const PyType_Spec Context_spec = {
             {Py_tp_getset,
              (PyGetSetDef[]){
 
-                 {"os_make_current_cb", (getter)Context_get_callback, (setter)Context_set_callback,
-                  "Callback to make this context current in the OS", nullptr},
+                 {"os_make_current_cb", (getter)Context_get_make_current_cb,
+                  (setter)Context_set_make_current_cb, "Callback for Context Acquisition", nullptr},
+                 {"os_release_cb", (getter)Context_get_release_cb, (setter)Context_set_release_cb,
+                  "Callback for Context Release", nullptr},
                  {}}
 
             },

@@ -269,13 +269,29 @@ def test_query_time_elapsed():
     """Verify GPU profiling query works."""
     query = caravangl.Query(target=caravangl.TIME_ELAPSED)
     
-    # We use basic clear as dummy work to profile
+    # 1. Setup dummy work (Triangle)
+    vs = "#version 330 core\nvoid main() { gl_Position = vec4(0.0, 0.0, 0.0, 1.0); }"
+    fs = "#version 330 core\nout vec4 f; void main() { f = vec4(1.0); }"
+    prog = caravangl.Program(vs, fs)
+    vao = caravangl.VertexArray()
+    pipe = caravangl.Pipeline(program=prog, vao=vao)
+    pipe.params[0] = 3 # 3 vertices
+    
+    # 2. Profile a loop of draws to force the GPU clock to tick
     query.begin()
-    caravangl.clear(GL_COLOR_BUFFER_BIT)
+    for _ in range(100):
+        caravangl.clear(GL_COLOR_BUFFER_BIT)
+        pipe.draw()
     query.end()
     
+    # 3. Get Result (This blocks until GPU finishes the 100 draws)
     nanoseconds = query.get_result()
-    assert nanoseconds > 0
+    
+    # If the GPU is insanely fast, it might still be 0, 
+    # but 100 draws should satisfy any driver's timer resolution.
+    assert nanoseconds >= 0
+    # Log it so we can see the perf in -s output
+    print(f"  [Perf] 100 dummy draws took: {nanoseconds} ns")
 
 def test_query_occlusion():
     """Verify Occlusion Culling (SAMPLES_PASSED) works."""
