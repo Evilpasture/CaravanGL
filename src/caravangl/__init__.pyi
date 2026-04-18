@@ -96,12 +96,14 @@ CCW: int
 FREE_THREADED: int
 DEBUG_BUILD: int
 
+# Sync
 TIMEOUT_IGNORED: int
 ALREADY_SIGNALED: int
 TIMEOUT_EXPIRED: int
 CONDITION_SATISFIED: int
 WAIT_FAILED: int
 
+# Queries
 TIME_ELAPSED: int
 TIMESTAMP: int
 SAMPLES_PASSED: int
@@ -123,8 +125,11 @@ def get_active_context() -> "Context | None": ...
 
 class Context:
     os_make_current_cb: Any
-    def __init__(self, loader: Any, callback: Any = None) -> None: ...
+    os_release_cb: Any
+    def __init__(self, loader: Any, os_make_current_cb: Any = None, os_release_cb: Any = None) -> None: ...
     def make_current(self) -> None: ...
+    def __enter__(self) -> "Context": ...
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None: ...
 
 class Buffer:
     def __init__(
@@ -252,6 +257,7 @@ __all__ = [
     "Pipeline",
     "Framebuffer",
     "Sync",
+    "Query",
     "enable_debug",
     "context",
     "inspect",
@@ -332,6 +338,11 @@ __all__ = [
     "TIMEOUT_EXPIRED",
     "CONDITION_SATISFIED",
     "WAIT_FAILED",
+    "TIME_ELAPSED",
+    "TIMESTAMP",
+    "SAMPLES_PASSED",
+    "ANY_SAMPLES_PASSED",
+    "PRIMITIVES_GENERATED",
     "FREE_THREADED",
     "DEBUG_BUILD",
 ]
