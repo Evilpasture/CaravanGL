@@ -26,6 +26,7 @@ python_add_library(caravangl MODULE
     src/caravangl/caravangl_context.c
     src/caravangl/caravangl_sync.c
     src/caravangl/caravangl_query.c
+    src/caravangl/caravangl_compute.c
 )
 
 # 3. Link the submodule and Python

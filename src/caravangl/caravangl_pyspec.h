@@ -11,3 +11,4 @@ extern const PyType_Spec Sampler_spec;
 extern const PyType_Spec Context_spec;
 extern const PyType_Spec Sync_spec;
 extern const PyType_Spec Query_spec;
+extern const PyType_Spec ComputePipeline_spec;

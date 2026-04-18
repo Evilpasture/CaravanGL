@@ -49,6 +49,7 @@ typedef struct CaravanState {
     PyTypeObject *ContextType;
     PyTypeObject *SyncType;
     PyTypeObject *QueryType;
+    PyTypeObject *ComputePipelineType;
     PyObject *CaravanError;
 } CaravanState;
 

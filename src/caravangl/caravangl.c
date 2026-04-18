@@ -279,6 +279,19 @@ PyCaravanGL_API caravan_meth_enable_debug([[maybe_unused]] PyObject *mod,
 #endif
 }
 
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+PyCaravanGL_API caravan_memory_barrier([[maybe_unused]] PyObject *mod, PyObject *arg) {
+    uint32_t mask = PyLong_AsUnsignedLong(arg);
+    WithActiveGL(OpenGL, cv_state, nullptr) {
+#ifndef __APPLE__
+        if (OpenGL->MemoryBarrier) {
+            OpenGL->MemoryBarrier(mask);
+        }
+#endif
+    }
+    Py_RETURN_NONE;
+}
+
 // -----------------------------------------------------------------------------
 // Module Lifecycle
 // -----------------------------------------------------------------------------
@@ -306,6 +319,7 @@ static int init_types(PyObject *mod, CaravanState *state) {
         {&Context_spec, (PyObject **)&state->ContextType, "Context"},
         {&Sync_spec, (PyObject **)&state->SyncType, "Sync"},
         {&Query_spec, (PyObject **)&state->QueryType, "Query"},
+        {&ComputePipeline_spec, (PyObject **)&state->ComputePipelineType, "ComputePipeline"},
     };
 
     auto mod_name = PyUnicode_FromString("caravangl");
@@ -462,6 +476,12 @@ static int init_constants(PyObject *mod) {
                   {"ANY_SAMPLES_PASSED", GL_ANY_SAMPLES_PASSED},
                   {"PRIMITIVES_GENERATED", GL_PRIMITIVES_GENERATED},
 
+                  {"SHADER_STORAGE_BARRIER_BIT", GL_SHADER_STORAGE_BARRIER_BIT},
+                  {"VERTEX_ATTRIB_ARRAY_BARRIER_BIT", GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT},
+                  {"ELEMENT_ARRAY_BARRIER_BIT", GL_ELEMENT_ARRAY_BARRIER_BIT},
+                  {"UNIFORM_BARRIER_BIT", GL_UNIFORM_BARRIER_BIT},
+                  {"SHADER_STORAGE_BUFFER", GL_SHADER_STORAGE_BUFFER},
+
                   // --- Build Metadata ---
                   {"FREE_THREADED",
 #if defined(Py_GIL_DISABLED) && Py_GIL_DISABLED
@@ -522,11 +542,12 @@ PyCaravanGL_Status caravan_traverse(PyObject *module, visitproc visit, void *arg
 
     // List of module-level types to visit
     PyObject **members[] = {
-        (PyObject **)&state->BufferType,       (PyObject **)&state->PipelineType,
-        (PyObject **)&state->ProgramType,      (PyObject **)&state->VertexArrayType,
-        (PyObject **)&state->UniformBatchType, (PyObject **)&state->TextureType,
-        (PyObject **)&state->ContextType,      (PyObject **)&state->SyncType,
-        (PyObject **)&state->QueryType,        (PyObject **)&state->FramebufferType,
+        (PyObject **)&state->BufferType,          (PyObject **)&state->PipelineType,
+        (PyObject **)&state->ProgramType,         (PyObject **)&state->VertexArrayType,
+        (PyObject **)&state->UniformBatchType,    (PyObject **)&state->TextureType,
+        (PyObject **)&state->ContextType,         (PyObject **)&state->SyncType,
+        (PyObject **)&state->QueryType,           (PyObject **)&state->FramebufferType,
+        (PyObject **)&state->ComputePipelineType,
     };
 
     TraverseContext context = {.visit = visit, .arg = arg};
@@ -546,11 +567,13 @@ PyCaravanGL_Status caravan_clear(PyObject *module) {
 
     // 2. Clear module-level type references
     PyObject **members[] = {
-        (PyObject **)&state->BufferType,       (PyObject **)&state->PipelineType,
-        (PyObject **)&state->ProgramType,      (PyObject **)&state->VertexArrayType,
-        (PyObject **)&state->UniformBatchType, (PyObject **)&state->TextureType,
-        (PyObject **)&state->ContextType,      (PyObject **)&state->SyncType,
-        (PyObject **)&state->QueryType,        (PyObject **)&state->FramebufferType};
+        (PyObject **)&state->BufferType,          (PyObject **)&state->PipelineType,
+        (PyObject **)&state->ProgramType,         (PyObject **)&state->VertexArrayType,
+        (PyObject **)&state->UniformBatchType,    (PyObject **)&state->TextureType,
+        (PyObject **)&state->ContextType,         (PyObject **)&state->SyncType,
+        (PyObject **)&state->QueryType,           (PyObject **)&state->FramebufferType,
+        (PyObject **)&state->ComputePipelineType,
+    };
 
     return caravan_dispatch_members(members, sizeof(members) / sizeof(members[0]), op_clear_member,
                                     nullptr);
@@ -579,6 +602,7 @@ static PyModuleDef caravan_module = {
              "Set the drawing region"},
             {"get_active_context", CARAVAN_CAST(caravan_get_active_context), METH_NOARGS,
              "Get the active context."},
+            {"memory_barrier", (PyCFunction)caravan_memory_barrier, METH_O, nullptr},
             {}
 
         },

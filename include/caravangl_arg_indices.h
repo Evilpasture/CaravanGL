@@ -123,6 +123,8 @@
 
 #define SCHEMA_QUERY_INIT(X) X(IDX_QUERY_TARGET, "target", uint32_t, false)
 
+#define SCHEMA_COMPUTE_INIT(X) X(IDX_COMP_SRC, "source", const char *, true)
+
 /** --- THE GENERATOR ENGINE --- **/
 
 #define GEN_ENUM(ID, NAME, TYPE, REQ) ID,
@@ -153,6 +155,7 @@ DEFINE_INDEX_GROUP(SamplerInit, SCHEMA_SAMPLER_INIT)
 DEFINE_INDEX_GROUP(ContextInit, SCHEMA_CONTEXT_INIT)
 DEFINE_INDEX_GROUP(SyncWait, SCHEMA_SYNC_WAIT)
 DEFINE_INDEX_GROUP(QueryInit, SCHEMA_QUERY_INIT)
+DEFINE_INDEX_GROUP(ComputeInit, SCHEMA_COMPUTE_INIT)
 
 // Master list of all parsers
 #define FOR_ALL_PARSERS(X)                                                                         \
@@ -176,7 +179,8 @@ DEFINE_INDEX_GROUP(QueryInit, SCHEMA_QUERY_INIT)
     X(Viewport, Viewport, SCHEMA_VIEWPORT)                                                         \
     X(SamplerInit, SamplerInit, SCHEMA_SAMPLER_INIT)                                               \
     X(SyncWait, SyncWait, SCHEMA_SYNC_WAIT)                                                        \
-    X(QueryInit, QueryInit, SCHEMA_QUERY_INIT)
+    X(QueryInit, QueryInit, SCHEMA_QUERY_INIT)                                                     \
+    X(ComputeInit, ComputeInit, SCHEMA_COMPUTE_INIT)
 
 // Define specialized mappers to split the declarations
 #define MAP_ONLY_PARSER(Name, ...) FastParser Name##Parser;

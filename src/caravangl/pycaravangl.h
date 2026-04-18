@@ -158,3 +158,8 @@ typedef struct {
     GLuint id;
     GLenum target;
 } PyCaravanQuery;
+
+typedef struct {
+    PyObject_HEAD PyCaravanContext *owning_context;
+    GLuint id;
+} PyCaravanComputePipeline;

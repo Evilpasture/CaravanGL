@@ -32,6 +32,8 @@ GL_DEPTH_STENCIL_ATTACHMENT = 0x821A
 GL_DEPTH24_STENCIL8 = 0x88F0
 GL_DEPTH_STENCIL = 0x84F9
 GL_UNSIGNED_INT_24_8 = 0x84FA
+GL_SHADER_STORAGE_BUFFER = 0x90D2
+GL_DYNAMIC_COPY = 0x88EA
 
 # --- Test Shaders ---
 VS_ATTR = """
@@ -500,3 +502,60 @@ def test_uniform_batch_packing():
     # Write a test float to first slot
     struct.pack_into("f", data, off1, 3.14)
     assert True
+
+def test_compute_pipeline():
+    # 1. Platform Check: Compute requires OpenGL 4.3+ (Not on macOS)
+    if sys.platform == "darwin":
+        pytest.skip("Compute Shaders not supported on macOS.")
+        
+    ctx = caravangl.get_active_context()
+    assert ctx is not None
+        
+    COMPUTE_SRC = """
+    #version 430 core
+    layout (local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+    layout(std430, binding = 0) buffer DataBuffer {
+        float values[];
+    };
+
+    void main() {
+        uint index = gl_GlobalInvocationID.x;
+        values[index] = values[index] * 2.0;
+    }
+    """
+    
+    with ctx:
+        # 2. Setup SSBO
+        initial_data = np.array([1.0, 2.0, 3.0, 4.0], dtype=np.float32)
+        # We use the module constants (which we added to caravangl.c earlier)
+        ssbo = caravangl.Buffer(
+            size=initial_data.nbytes, 
+            data=initial_data.tobytes(), 
+            target=caravangl.SHADER_STORAGE_BUFFER if hasattr(caravangl, "SHADER_STORAGE_BUFFER") else 0x90D2,
+            usage=caravangl.DYNAMIC_DRAW
+        )
+        
+        # Bind to slot 0
+        ssbo.bind_base(index=0)
+        
+        # 3. Create and Dispatch
+        comp = caravangl.ComputePipeline(source=COMPUTE_SRC)
+        comp.dispatch(4, 1, 1)
+        
+        # 4. Synchronize: Ensure GPU finished writing before CPU reads
+        # This constant was added to your caravangl.c constants list
+        caravangl.memory_barrier(caravangl.SHADER_STORAGE_BARRIER_BIT)
+        
+        # 5. Verify results via Persistent Mapping (if supported)
+        info = caravangl.inspect(ssbo)
+        assert info is not None
+        if info.get("is_persistent"):
+            mapped = ssbo.map()
+            # Use np.frombuffer to interpret the GPU memory directly
+            result = np.frombuffer(mapped, dtype=np.float32, count=4)
+            
+            assert result[0] == 2.0
+            assert result[1] == 4.0
+            assert result[2] == 6.0
+            assert result[3] == 8.0
