@@ -1,4 +1,5 @@
 #pragma once
+#include "caravangl_specs.h"
 #include "caravangl_uniform_upload.h"
 #include <Python.h>
 
