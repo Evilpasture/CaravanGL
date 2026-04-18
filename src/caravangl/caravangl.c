@@ -114,6 +114,11 @@ static inline PyObject *inspect_uniform_batch(PyCaravanUniformBatch *bat) {
                           (Py_ssize_t)bat->max_payload_bytes);
 }
 
+static inline PyObject *inspect_compute_pipeline(PyCaravanComputePipeline *comp) {
+    return FastBuild_Dict("type", "compute_pipeline", 
+                          "id", (Py_ssize_t)comp->id);
+}
+
 // --- Main Dispatcher ---
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 PyCaravanGL_API caravan_meth_inspect(PyObject *mod, PyObject *arg) {
@@ -135,6 +140,10 @@ PyCaravanGL_API caravan_meth_inspect(PyObject *mod, PyObject *arg) {
     }
     if (typ == state->UniformBatchType) {
         return inspect_uniform_batch((PyCaravanUniformBatch *)arg);
+    }
+
+    if (typ == state->ComputePipelineType) {
+        return inspect_compute_pipeline((PyCaravanComputePipeline *)arg);
     }
 
     if (typ == state->ProgramType) {
