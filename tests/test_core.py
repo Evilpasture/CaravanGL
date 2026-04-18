@@ -1,6 +1,5 @@
 import sys
 import ctypes
-import struct
 import pytest
 import threading
 import time
@@ -10,6 +9,7 @@ import glfw
 import numpy as np
 
 import caravangl
+from caravangl import Context, Sync
 
 # --- Supplemental Constants ---
 GL_COLOR_BUFFER_BIT = 0x00004000
@@ -115,7 +115,7 @@ def test_vao_attribute_setup():
     vao = caravangl.VertexArray()
     vbo = caravangl.Buffer(size=4096, target=caravangl.TRIANGLES)
     vao.bind_attribute(0, vbo, 3, caravangl.FLOAT, 0, 12, 0)
-    assert caravangl.inspect(vao)["type"] == "vertex_array"
+    assert (i := caravangl.inspect(vao)) is not None and i["type"] == "vertex_array"
 
 def test_pipeline_render_state_persistence():
     prog = caravangl.Program(vertex_shader=VS_DUMMY, fragment_shader=FS_DUMMY)
@@ -123,6 +123,7 @@ def test_pipeline_render_state_persistence():
     pipe = caravangl.Pipeline(program=prog, vao=vao, depth_test=1, depth_write=0, blend=1)
     
     info = caravangl.inspect(pipe)
+    assert info is not None
     assert info["render_state"]["depth_test"] is True
     assert info["render_state"]["depth_write"] is False
     assert info["render_state"]["blend"] is True
@@ -139,6 +140,7 @@ def test_high_frequency_mutation():
         mv[2] = i * 2  
         
     info = caravangl.inspect(pipe)
+    assert info is not None
     assert info["draw_params"]["vertex_count"] == 999
     assert info["draw_params"]["first_vertex"] == 1998
 
@@ -179,13 +181,15 @@ def test_parallel_context_rendering():
     # Temporarily release main thread context
     glfw.make_context_current(None)
 
-    def render_work(ctx, color):
+    def render_work(ctx: Context, color: tuple[int, int, int, int]):
         # Look how clean this is! Automatically binds and unbinds.
         with ctx:
             caravangl.clear_color(*color)
             caravangl.clear(GL_COLOR_BUFFER_BIT)
 
     main_ctx = caravangl.get_active_context()
+
+    assert main_ctx is not None
     
     t1 = threading.Thread(target=render_work, args=(main_ctx, (1, 0, 0, 1)))
     t2 = threading.Thread(target=render_work, args=(ctx2, (0, 1, 0, 1)))
@@ -199,8 +203,9 @@ def test_parallel_context_rendering():
 
 def test_cross_thread_sync_data_consistency():
     main_ctx = caravangl.get_active_context()
+    assert main_ctx is not None
     vbo = caravangl.Buffer(size=1024)
-    sync_queue = []
+    sync_queue: list[Sync] = []
 
     # Release main context so thread can take it
     glfw.make_context_current(None)
@@ -228,6 +233,7 @@ def test_buffer_contention_stress():
     vbo = caravangl.Buffer(size=1024, usage=GL_DYNAMIC_DRAW)
     main_window = glfw.get_current_context()
     main_ctx = caravangl.get_active_context()
+    assert main_ctx is not None
     
     shared_win = glfw.create_window(1, 1, "Stress Win", None, main_window)
     ctx2 = caravangl.Context(
