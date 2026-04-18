@@ -12,10 +12,10 @@
  */
 typedef struct CaravanBuffer {
     GLuint id;
-    GLenum target;     // GL_ARRAY_BUFFER, GL_UNIFORM_BUFFER, etc.
-    GLsizeiptr size;   // Total size in bytes
-    GLenum usage;      // GL_STATIC_DRAW, GL_DYNAMIC_STORAGE_BIT, etc.
-    bool is_immutable; // Was this created with glBufferStorage?
+    GLenum target;      // GL_ARRAY_BUFFER, GL_UNIFORM_BUFFER, etc.
+    GLsizeiptr size;    // Total size in bytes
+    GLenum usage;       // GL_STATIC_DRAW, GL_DYNAMIC_STORAGE_BIT, etc.
+    bool is_immutable;  // Was this created with glBufferStorage?
     bool is_persistent; // Track if we can map this persistently
 } CaravanBuffer;
 
@@ -114,7 +114,7 @@ typedef struct [[gnu::aligned(CaravanRenderState_Alignment)]] CaravanRenderState
             GLenum blend_eq_rgb;
             GLenum blend_eq_alpha;
             GLenum stencil_func;
-            GLint  stencil_ref;
+            GLint stencil_ref;
             GLuint stencil_read_mask;
             GLuint stencil_write_mask;
             GLenum stencil_fail_op;
@@ -135,17 +135,16 @@ typedef struct [[gnu::aligned(CaravanRenderState_Alignment)]] CaravanRenderState
         };
         // Array for linter-safe block comparison
         // 128 bytes / 4 = 32 elements
-        uint32_t data[32]; 
+        uint32_t data[32];
     };
 } CaravanRenderState;
 
-static_assert(sizeof(CaravanRenderState) == 128, 
+static_assert(sizeof(CaravanRenderState) == 128,
               "CaravanRenderState must be exactly 128 bytes (2 cache lines).");
 
-
 typedef enum : uint32_t {
-    CV_DIRTY_PROGRAM  = 1U << 0U,
-    CV_DIRTY_VAO      = 1U << 1U,
+    CV_DIRTY_PROGRAM = 1U << 0U,
+    CV_DIRTY_VAO = 1U << 1U,
     CV_DIRTY_FBO_DRAW = 1U << 2U,
     CV_DIRTY_FBO_READ = 1U << 3U,
     CV_DIRTY_VIEWPORT = 1U << 4U

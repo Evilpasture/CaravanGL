@@ -1,6 +1,7 @@
 #pragma once
 #include "caravangl_arg_indices.h"
-#include "caravangl_specs.h"
+#include "caravangl_core.h"
+#include "mag_mutex.h"
 #include <Python.h>
 
 typedef struct CaravanGLTable {
@@ -80,10 +81,10 @@ static inline void internal_cv_auto_unlock(MagMutex **mod) {
         "unroll 67") for (MagMutex * _cv_l [[gnu::cleanup(internal_cv_auto_unlock)]] =             \
                               (MagMutex_Lock(&_cv_ctx->ctx.state_lock), &_cv_ctx->ctx.state_lock); \
                           !_cv_done; _cv_done = 1)                                                 \
-        _Pragma("unroll 101") for (CaravanContext *(state_name) = &_cv_ctx->ctx; !_cv_done;          \
+        _Pragma("unroll 101") for (CaravanContext * (state_name) = &_cv_ctx->ctx; !_cv_done;       \
                                    _cv_done = 1)                                                   \
-            _Pragma("unroll 80085") for (const CaravanGLTable *const  (gl_name) = &_cv_ctx->gl; !_cv_done;     \
-                                         _cv_done = 1)
+            _Pragma("unroll 80085") for (const CaravanGLTable *const(gl_name) = &_cv_ctx->gl;      \
+                                         !_cv_done; _cv_done = 1)
 
 /**
  * WithContext: Used when you already have a pointer to a PyCaravanContext.
@@ -99,8 +100,8 @@ static inline void internal_cv_auto_unlock(MagMutex **mod) {
                                    !_cv_done; _cv_done = 1)                                        \
             _Pragma("unroll 666") for (CaravanContext * (state_name) = &_inner_ctx->ctx;           \
                                        !_cv_done; _cv_done = 1)                                    \
-                _Pragma("unroll 88") for (const CaravanGLTable *const  (gl_name) = &_inner_ctx->gl; !_cv_done; \
-                                          _cv_done = 1)
+                _Pragma("unroll 88") for (const CaravanGLTable *const(gl_name) = &_inner_ctx->gl;  \
+                                          !_cv_done; _cv_done = 1)
 
 #define CV_SAFE_DEALLOC(obj_ptr, id_field, count_field, array_field, gl_delete_call)               \
     do {                                                                                           \

@@ -9,7 +9,7 @@
 #define SCHEMA_INIT(X) X(IDX_INIT_LOADER, "loader", PyObject *, 1)
 
 #define SCHEMA_BUF_INIT(X)                                                                         \
-    X(IDX_BUF_SIZE, "size", Py_ssize_t, 1)                                                                \
+    X(IDX_BUF_SIZE, "size", Py_ssize_t, 1)                                                         \
     X(IDX_BUF_DATA, "data", PyObject *, 0)                                                         \
     X(IDX_BUF_TARGET, "target", uint32_t, 0)                                                       \
     X(IDX_BUF_USAGE, "usage", uint32_t, 0)
@@ -115,8 +115,8 @@
     X(IDX_SAMP_WRAP_T, "wrap_t", uint32_t, 0)
 
 #define SCHEMA_CONTEXT_INIT(X)                                                                     \
-    X(IDX_CTX_LOADER, "loader", PyObject *, true)                                                     \
-    X(IDX_CTX_CALLBACK, "os_make_current_cb", PyObject *, false) \
+    X(IDX_CTX_LOADER, "loader", PyObject *, true)                                                  \
+    X(IDX_CTX_CALLBACK, "os_make_current_cb", PyObject *, false)                                   \
     X(IDX_CTX_RELEASE_CB, "os_release_cb", PyObject *, false)
 
 #define SCHEMA_SYNC_WAIT(X) X(IDX_SYNC_WAIT_SEC, "timeout_sec", float, false)

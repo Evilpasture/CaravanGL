@@ -1348,14 +1348,13 @@ typedef enum ImageFormatTupleIndex : uint8_t {
     X(void, BufferStorage, GLenum target, GLsizeiptr size, const void *data, GLbitfield flags)
 
 // ======================= OPENGL 4.5 CORE =======================
-#define GL_FUNCTIONS_4_5_CORE(X)                                           \
-    X(void, BindTextureUnit, GLuint unit, GLuint texture)                  \
-    X(void, CreateTextures, GLenum target, GLsizei n, GLuint *textures)    \
-    X(void, TextureStorage2D, GLuint texture, GLsizei levels,              \
-      GLenum internalformat, GLsizei width, GLsizei height)                \
-    X(void, TextureSubImage2D, GLuint texture, GLint level,                \
-      GLint xoffset, GLint yoffset, GLsizei width, GLsizei height,         \
-      GLenum format, GLenum type, const void *pixels)
+#define GL_FUNCTIONS_4_5_CORE(X)                                                                   \
+    X(void, BindTextureUnit, GLuint unit, GLuint texture)                                          \
+    X(void, CreateTextures, GLenum target, GLsizei n, GLuint *textures)                            \
+    X(void, TextureStorage2D, GLuint texture, GLsizei levels, GLenum internalformat,               \
+      GLsizei width, GLsizei height)                                                               \
+    X(void, TextureSubImage2D, GLuint texture, GLint level, GLint xoffset, GLint yoffset,          \
+      GLsizei width, GLsizei height, GLenum format, GLenum type, const void *pixels)
 
 // ======================= OPTIONAL / EXPERIMENTAL =======================
 
