@@ -7,6 +7,8 @@
 typedef struct CaravanGLTable {
 // 3.3 is safe on Mac
 #pragma clang diagnostic push
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wattributes" 
 #pragma clang diagnostic ignored "-Wignored-attributes"
 #define GL_PTR_GEN(ret, name, ...) [[nodiscard]] ret(GL_API *name)(__VA_ARGS__);
     GL_FUNCTIONS_3_3_CORE(GL_PTR_GEN)
@@ -34,6 +36,7 @@ typedef struct CaravanGLTable {
 
 #undef GL_PTR_DEPRECATED
 #pragma clang diagnostic pop
+#pragma GCC diagnostic pop
 } CaravanGLTable;
 
 typedef struct CaravanState {
