@@ -293,7 +293,7 @@ PyCaravanGL_API caravan_memory_barrier([[maybe_unused]] PyObject *mod, PyObject 
     WithActiveGL(OpenGL, cv_state, nullptr) {
 #ifndef __APPLE__
         if (OpenGL->MemoryBarrier) {
-            OpenGL->MemoryBarrier(mask);
+            OpenGL->MemoryBarrier((GLbitfield)mask);
         }
 #endif
     }
