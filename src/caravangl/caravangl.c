@@ -289,7 +289,7 @@ PyCaravanGL_API caravan_meth_enable_debug([[maybe_unused]] PyObject *mod,
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 PyCaravanGL_API caravan_memory_barrier([[maybe_unused]] PyObject *mod, PyObject *arg) {
-    uint32_t mask = PyLong_AsUnsignedLong(arg);
+    [[maybe_unused]] uint32_t mask = PyLong_AsUnsignedLong(arg);
     WithActiveGL(OpenGL, cv_state, nullptr) {
 #ifndef __APPLE__
         if (OpenGL->MemoryBarrier) {

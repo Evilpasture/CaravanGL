@@ -101,8 +101,7 @@ typedef struct CaravanTextureBinding {
 static constexpr size_t CaravanRenderState_Alignment = 64;
 
 typedef struct CaravanRenderState {
-    alignas(CaravanRenderState_Alignment)
-    union {
+    alignas(CaravanRenderState_Alignment) union {
         struct {
             // 16 Enums/Ints (64 bytes = Exactly 1 Cache Line)
             GLenum cull_face_mode;
@@ -155,6 +154,12 @@ typedef struct CaravanContext {
     MagMutex state_lock;
     uint32_t dirty_flags;
     struct {
+        // Use engine-defined maximums for arrays
+        CaravanBufferBinding ubo[CARAVAN_MAX_UBO_BINDINGS];
+        CaravanBufferBinding ssbo[CARAVAN_MAX_SSBO_BINDINGS];
+        CaravanTextureBinding texture_units[CARAVAN_MAX_TEXTURE_UNITS];
+
+        CaravanRenderState render;
         GLuint vao;
         GLuint program;
         GLuint fbo_read;
@@ -162,13 +167,6 @@ typedef struct CaravanContext {
 
         // Track the active texture unit to avoid redundant glActiveTexture calls
         GLuint active_texture_unit;
-
-        // Use engine-defined maximums for arrays
-        CaravanBufferBinding ubo[CARAVAN_MAX_UBO_BINDINGS];
-        CaravanBufferBinding ssbo[CARAVAN_MAX_SSBO_BINDINGS];
-        CaravanTextureBinding texture_units[CARAVAN_MAX_TEXTURE_UNITS];
-
-        CaravanRenderState render;
         GLsync last_work_fence; // For GPU/CPU sync
 
         // Basic Render State Caching (saves performance)
