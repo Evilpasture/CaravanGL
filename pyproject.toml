@@ -13,6 +13,7 @@ authors = [{ name = "Evilpasture" }]
 [tool.scikit-build]
 build.verbose = true
 cmake.args = ["-GNinja"]
+cmake.define = { "CMAKE_C_COMPILER" = "clang","CMAKE_CXX_COMPILER" = "clang++" }
 wheel.packages = ["src/caravangl"]
 wheel.exclude = ["src/*.c", "src/*.h", "cmake/*", "tests/*"]
 
