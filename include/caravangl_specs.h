@@ -100,7 +100,8 @@ typedef struct CaravanTextureBinding {
 // Alignment 64 = Standard CPU Cache Line
 static constexpr size_t CaravanRenderState_Alignment = 64;
 
-typedef struct [[gnu::aligned(CaravanRenderState_Alignment)]] CaravanRenderState {
+typedef struct CaravanRenderState {
+    alignas(CaravanRenderState_Alignment)
     union {
         struct {
             // 16 Enums/Ints (64 bytes = Exactly 1 Cache Line)
@@ -142,7 +143,7 @@ typedef struct [[gnu::aligned(CaravanRenderState_Alignment)]] CaravanRenderState
 static_assert(sizeof(CaravanRenderState) == 128,
               "CaravanRenderState must be exactly 128 bytes (2 cache lines).");
 
-typedef enum : uint32_t {
+typedef enum : uint8_t {
     CV_DIRTY_PROGRAM = 1U << 0U,
     CV_DIRTY_VAO = 1U << 1U,
     CV_DIRTY_FBO_DRAW = 1U << 2U,
