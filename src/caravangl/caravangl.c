@@ -598,18 +598,21 @@ static PyModuleDef caravan_module = {
     .m_name = "caravangl",
     .m_doc = "CaravanGL: Modern Isolated OpenGL Context",
     .m_size = sizeof(CaravanState),
-    .m_methods = (PyMethodDef[]){MODULE_NOARGS(enable_debug),
-                                 MODULE_NOARGS(context),
-                                 MODULE_O(inspect),
-                                 MODULE_FASTCALL(clear),
-                                 MODULE_FASTCALL(clear_color),
-                                 MODULE_NOARGS(bind_default_framebuffer),
-                                 MODULE_FASTCALL(viewport),
-                                 MODULE_NOARGS(get_active_context),
-                                 MODULE_O(memory_barrier),
-                                 {}
+    .m_methods =
+        (PyMethodDef[]){
 
-    },
+            MODULE_NOARGS(enable_debug),
+            MODULE_NOARGS(context),
+            MODULE_O(inspect),
+            MODULE_FASTCALL(clear),
+            MODULE_FASTCALL(clear_color),
+            MODULE_NOARGS(bind_default_framebuffer),
+            MODULE_FASTCALL(viewport),
+            MODULE_NOARGS(get_active_context),
+            MODULE_O(memory_barrier),
+            {}
+
+        },
     .m_slots =
         (PyModuleDef_Slot[]){
 
