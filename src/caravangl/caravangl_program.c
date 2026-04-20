@@ -143,21 +143,30 @@ PyCaravanGL_API Program_get_uniform_location(PyCaravanProgram *self, PyObject *a
     return nullptr;
 }
 
+#define PROG_NOARGS(name) {#name, CARAVAN_CAST(CARAVAN_JOIN(Program_, name)), METH_NOARGS, nullptr}
+#define PROG_FASTCALL(name)                                                                        \
+    {#name, CARAVAN_CAST(CARAVAN_JOIN(Program_, name)), METH_FASTCALL | METH_KEYWORDS, nullptr}
+#define PROG_O(name) {#name, CARAVAN_CAST(CARAVAN_JOIN(Program_, name)), METH_O, nullptr}
+
 // NOLINTNEXTLINE(misc-use-internal-linkage)
 const PyType_Spec Program_spec = {
     .name = "caravangl.Program",
     .basicsize = sizeof(PyCaravanProgram),
     .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
     .slots =
-        (PyType_Slot[]){{Py_tp_init, Program_init},
-                        {Py_tp_dealloc, Program_dealloc},
-                        {Py_tp_methods,
-                         (PyMethodDef[]){
+        (PyType_Slot[]){
 
-                             {"get_uniform_location", (PyCFunction)Program_get_uniform_location,
-                              METH_O, "Get uniform location by name"},
-                             {}}
+            {Py_tp_init, Program_init},
+            {Py_tp_dealloc, Program_dealloc},
+            {Py_tp_methods,
+             (PyMethodDef[]){
 
-                        },
-                        {}},
+                 PROG_O(get_uniform_location), {}
+
+             }
+
+            },
+            {}
+
+        },
 };

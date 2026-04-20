@@ -168,6 +168,11 @@ PyCaravanGL_API Texture_generate_mipmap(PyCaravanTexture *self, [[maybe_unused]]
     Py_RETURN_NONE;
 }
 
+#define TEX_NOARGS(name) {#name, CARAVAN_CAST(CARAVAN_JOIN(Texture_, name)), METH_NOARGS, nullptr}
+#define TEX_FASTCALL(name)                                                                         \
+    {#name, CARAVAN_CAST(CARAVAN_JOIN(Texture_, name)), METH_FASTCALL | METH_KEYWORDS, nullptr}
+#define TEX_O(name) {#name, CARAVAN_CAST(CARAVAN_JOIN(Texture_, name)), METH_O, nullptr}
+
 // NOLINTNEXTLINE(misc-use-internal-linkage)
 const PyType_Spec Texture_spec = {
     .name = "caravangl.Texture",
@@ -183,13 +188,7 @@ const PyType_Spec Texture_spec = {
             {Py_tp_methods,
              (PyMethodDef[]){
 
-                 {"upload", CARAVAN_CAST(Texture_upload), METH_FASTCALL | METH_KEYWORDS,
-                  "Upload data to GPU"},
-                 {"bind", CARAVAN_CAST(Texture_bind), METH_FASTCALL | METH_KEYWORDS,
-                  "Bind texture to unit"},
-                 {"generate_mipmap", (PyCFunction)Texture_generate_mipmap, METH_NOARGS,
-                  "Generate mipmaps"},
-                 {}
+                 TEX_FASTCALL(upload), TEX_FASTCALL(bind), TEX_NOARGS(generate_mipmap), {}
 
              }
 

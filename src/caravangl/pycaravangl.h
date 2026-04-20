@@ -10,6 +10,10 @@
 #define IntToPtr(x) ((void *)(uintptr_t)(x))
 
 #define CARAVAN_CAST(x) (PyCFunction)(void (*)(void))(x)
+#define CARAVAN_STR(x) #x
+#define CARAVAN_TOSTR(x) CARAVAN_STR(x)
+#define CARAVAN_GLUE(a, b) a##b
+#define CARAVAN_JOIN(a, b) CARAVAN_GLUE(a, b)
 
 #define FOR_ALL_CARAVAN_TYPES(DO, state)                                                           \
     DO(state->BufferType)                                                                          \

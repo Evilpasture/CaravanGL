@@ -80,6 +80,11 @@ PyCaravanGL_API Query_get_result(PyCaravanQuery *self, [[maybe_unused]] PyObject
     return PyLong_FromUnsignedLongLong(result);
 }
 
+#define QUERY_NOARGS(name) {#name, CARAVAN_CAST(CARAVAN_JOIN(Query_, name)), METH_NOARGS, nullptr}
+#define QUERY_FASTCALL(name)                                                                       \
+    {#name, CARAVAN_CAST(CARAVAN_JOIN(Query_, name)), METH_FASTCALL | METH_KEYWORDS, nullptr}
+#define QUERY_O(name) {#name, CARAVAN_CAST(CARAVAN_JOIN(Query_, name)), METH_O, nullptr}
+
 // NOLINTNEXTLINE(misc-use-internal-linkage)
 const PyType_Spec Query_spec = {
     .name = "caravangl.Query",
@@ -95,14 +100,11 @@ const PyType_Spec Query_spec = {
             {Py_tp_methods,
              (PyMethodDef[]){
 
-                 {"begin", (PyCFunction)Query_begin, METH_NOARGS, "Start recording query."},
-                 {"end", (PyCFunction)Query_end, METH_NOARGS, "Stop recording query."},
-                 {"record_timestamp", (PyCFunction)Query_record_timestamp, METH_NOARGS,
-                  "Record a single timestamp."},
-                 {"is_ready", (PyCFunction)Query_is_ready, METH_NOARGS,
-                  "Check if the GPU has finished writing the result."},
-                 {"get_result", (PyCFunction)Query_get_result, METH_NOARGS,
-                  "Block and get the result (e.g. nanoseconds or samples)."},
+                 QUERY_NOARGS(begin),
+                 QUERY_NOARGS(end),
+                 QUERY_NOARGS(record_timestamp),
+                 QUERY_NOARGS(is_ready),
+                 QUERY_NOARGS(get_result),
                  {}
 
              }

@@ -248,6 +248,19 @@ PyCaravanGL_API Pipeline_get_params(PyCaravanPipeline *self, [[maybe_unused]] vo
     return PyMemoryView_FromBuffer(&view);
 }
 
+#define PIPE_NOARGS(name) {#name, CARAVAN_CAST(CARAVAN_JOIN(Pipeline_, name)), METH_NOARGS, nullptr}
+#define PIPE_FASTCALL(name)                                                                        \
+    {#name, CARAVAN_CAST(CARAVAN_JOIN(Pipeline_, name)), METH_FASTCALL | METH_KEYWORDS, nullptr}
+#define PIPE_O(name) {#name, CARAVAN_CAST(CARAVAN_JOIN(Pipeline_, name)), METH_O, nullptr}
+
+// For Read/Write
+#define PIPE_GETSET(name)                                                                          \
+    {#name, (getter)CARAVAN_JOIN(Pipeline_get_, name), (setter)CARAVAN_JOIN(Pipeline_set_, name),  \
+     nullptr, nullptr}
+
+// For Read-Only
+#define PIPE_GET(name) {#name, (getter)CARAVAN_JOIN(Pipeline_get_, name), nullptr, nullptr, nullptr}
+
 // NOLINTNEXTLINE(misc-use-internal-linkage)
 const PyType_Spec Pipeline_spec = {
     .name = "caravangl.Pipeline",
@@ -265,19 +278,18 @@ const PyType_Spec Pipeline_spec = {
             {Py_tp_methods,
              (PyMethodDef[]){
 
-                 {"upload_uniforms", CARAVAN_CAST(Pipeline_upload_uniforms),
-                  METH_FASTCALL | METH_KEYWORDS, nullptr},
-                 {"draw", (PyCFunction)Pipeline_draw, METH_NOARGS, "Execute the draw call."},
-                 {}}
+                 PIPE_FASTCALL(upload_uniforms), PIPE_NOARGS(draw), {}
+
+             }
 
             },
             {Py_tp_getset,
 
              (PyGetSetDef[]){
 
-                 {"params", (getter)Pipeline_get_params, nullptr,
-                  "Direct access to draw parameters", nullptr},
-                 {}}
+                 PIPE_GET(params), {}
+
+             }
 
             },
             {Py_tp_doc, "CaravanGL Pipeline: Immutable Draw State"},

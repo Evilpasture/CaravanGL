@@ -105,6 +105,12 @@ PyCaravanGL_API VertexArray_bind_index_buffer(PyCaravanVertexArray *self, PyObje
     Py_RETURN_NONE;
 }
 
+#define VAO_NOARGS(name)                                                                           \
+    {#name, CARAVAN_CAST(CARAVAN_JOIN(VertexArray_, name)), METH_NOARGS, nullptr}
+#define VAO_FASTCALL(name)                                                                         \
+    {#name, CARAVAN_CAST(CARAVAN_JOIN(VertexArray_, name)), METH_FASTCALL | METH_KEYWORDS, nullptr}
+#define VAO_O(name) {#name, CARAVAN_CAST(CARAVAN_JOIN(VertexArray_, name)), METH_O, nullptr}
+
 // NOLINTNEXTLINE(misc-use-internal-linkage)
 const PyType_Spec VertexArray_spec = {
     .name = "caravangl.VertexArray",
@@ -118,11 +124,9 @@ const PyType_Spec VertexArray_spec = {
             {Py_tp_methods,
              (PyMethodDef[]){
 
-                 {"bind_attribute", CARAVAN_CAST(VertexArray_bind_attribute),
-                  METH_FASTCALL | METH_KEYWORDS, "Map a VBO to a shader attribute"},
-                 {"bind_index_buffer", CARAVAN_CAST(VertexArray_bind_index_buffer), METH_O,
-                  nullptr},
-                 {}}
+                 VAO_FASTCALL(bind_attribute), VAO_O(bind_index_buffer), {}
+
+             }
 
             },
             {}

@@ -91,6 +91,13 @@ PyCaravanGL_Slot ComputePipeline_dealloc(PyCaravanComputePipeline *self) {
     Py_TYPE(self)->tp_free((PyObject *)self);
 }
 
+#define COMPUTE_NOARGS(name)                                                                       \
+    {#name, CARAVAN_CAST(CARAVAN_JOIN(ConputePipeline_, name)), METH_NOARGS, nullptr}
+#define COMPUTE_FASTCALL(name)                                                                     \
+    {#name, CARAVAN_CAST(CARAVAN_JOIN(ComputePipeline_, name)), METH_FASTCALL | METH_KEYWORDS,     \
+     nullptr}
+#define COMPUTE_O(name) {#name, CARAVAN_CAST(CARAVAN_JOIN(ComputePipeline_, name)), METH_O, nullptr}
+
 const PyType_Spec ComputePipeline_spec = {
     .name = "caravangl.ComputePipeline",
     .basicsize = sizeof(PyCaravanComputePipeline),
@@ -105,9 +112,7 @@ const PyType_Spec ComputePipeline_spec = {
             {Py_tp_methods,
              (PyMethodDef[]){
 
-                 {"dispatch", CARAVAN_CAST(ComputePipeline_dispatch), METH_FASTCALL | METH_KEYWORDS,
-                  "Launch compute kernel"},
-                 {}
+                 COMPUTE_FASTCALL(dispatch), {}
 
              }
 

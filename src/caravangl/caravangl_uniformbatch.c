@@ -121,6 +121,20 @@ PyCaravanGL_API UniformBatch_get_data(PyCaravanUniformBatch *self, [[maybe_unuse
     return PyMemoryView_FromBuffer(&view);
 }
 
+#define UNIB_NOARGS(name)                                                                          \
+    {#name, CARAVAN_CAST(CARAVAN_JOIN(UniformBatch_, name)), METH_NOARGS, nullptr}
+#define UNIB_FASTCALL(name)                                                                        \
+    {#name, CARAVAN_CAST(CARAVAN_JOIN(UniformBatch_, name)), METH_FASTCALL | METH_KEYWORDS, nullptr}
+#define UNIB_O(name) {#name, CARAVAN_CAST(CARAVAN_JOIN(UniformBatch_, name)), METH_O, nullptr}
+// For Read/Write
+#define UNIB_GETSET(name)                                                                          \
+    {#name, (getter)CARAVAN_JOIN(UniformBatch_get_, name),                                         \
+     (setter)CARAVAN_JOIN(UniformBatch_set_, name), nullptr, nullptr}
+
+// For Read-Only
+#define UNIB_GET(name)                                                                             \
+    {#name, (getter)CARAVAN_JOIN(UniformBatch_get_, name), nullptr, nullptr, nullptr}
+
 // NOLINTNEXTLINE(misc-use-internal-linkage)
 const PyType_Spec UniformBatch_spec = {
     .name = "caravangl.UniformBatch",
@@ -134,17 +148,17 @@ const PyType_Spec UniformBatch_spec = {
             {Py_tp_methods,
              (PyMethodDef[]){
 
-                 {"add", CARAVAN_CAST(UniformBatch_add), METH_FASTCALL | METH_KEYWORDS,
-                  "Register a uniform and get its byte offset."},
-                 {}}
+                 UNIB_FASTCALL(add), {}
+
+             }
 
             },
             {Py_tp_getset,
              (PyGetSetDef[]){
 
-                 {"data", (getter)UniformBatch_get_data, nullptr,
-                  "Zero-copy access to the uniform payload memory", nullptr},
-                 {}}
+                 UNIB_GET(data), {}
+
+             }
 
             },
             {}

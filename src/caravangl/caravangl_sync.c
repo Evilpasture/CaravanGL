@@ -76,6 +76,12 @@ PyCaravanGL_API Sync_wait(PyCaravanSync *self, PyObject *const *args, Py_ssize_t
     }
     return nullptr;
 }
+
+#define SYNC_NOARGS(name) {#name, CARAVAN_CAST(CARAVAN_JOIN(Sync_, name)), METH_NOARGS, nullptr}
+#define SYNC_FASTCALL(name)                                                                        \
+    {#name, CARAVAN_CAST(CARAVAN_JOIN(Sync_, name)), METH_FASTCALL | METH_KEYWORDS, nullptr}
+#define SYNC_O(name) {#name, CARAVAN_CAST(CARAVAN_JOIN(Sync_, name)), METH_O, nullptr}
+
 // NOLINTNEXTLINE(misc-use-internal-linkage)
 const PyType_Spec Sync_spec = {
     .name = "caravangl.Sync",
@@ -91,9 +97,7 @@ const PyType_Spec Sync_spec = {
             {Py_tp_methods,
              (PyMethodDef[]){
 
-                 {"wait", (PyCFunction)Sync_wait, METH_FASTCALL | METH_KEYWORDS,
-                  "Block thread until GPU finishes prior commands."},
-                 {}
+                 SYNC_FASTCALL(wait), {}
 
              }
 

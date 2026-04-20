@@ -195,6 +195,11 @@ PyCaravanGL_API Buffer_bind_base(PyCaravanBuffer *self, PyObject *const *args, P
     Py_RETURN_NONE;
 }
 
+#define BUF_NOARGS(name) {#name, CARAVAN_CAST(CARAVAN_JOIN(Buffer_, name)), METH_NOARGS, nullptr}
+#define BUF_FASTCALL(name)                                                                         \
+    {#name, CARAVAN_CAST(CARAVAN_JOIN(Buffer_, name)), METH_FASTCALL | METH_KEYWORDS, nullptr}
+#define BUF_O(name) {#name, CARAVAN_CAST(CARAVAN_JOIN(Buffer_, name)), METH_O, nullptr}
+
 // NOLINTNEXTLINE(misc-use-internal-linkage)
 const PyType_Spec Buffer_spec = {
     .name = "caravangl.Buffer",
@@ -211,12 +216,9 @@ const PyType_Spec Buffer_spec = {
             {Py_tp_methods,
              (PyMethodDef[]){
 
-                 {"write", CARAVAN_CAST(Buffer_write), METH_FASTCALL | METH_KEYWORDS,
-                  "Write data to buffer."},
-                 {"bind_base", CARAVAN_CAST(Buffer_bind_base), METH_FASTCALL | METH_KEYWORDS,
-                  "Bind as indexed resource."},
-                 {"map", (PyCFunction)Buffer_map, METH_NOARGS, "Map to buffer."},
-                 {}}
+                 BUF_FASTCALL(write), BUF_FASTCALL(bind_base), BUF_NOARGS(map), {}
+
+             }
 
             },
             {Py_tp_doc, "CaravanGL Buffer Object (VBO, IBO, UBO)"},

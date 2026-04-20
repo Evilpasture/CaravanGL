@@ -204,16 +204,16 @@ PyCaravanGL_API caravan_meth_clear_color(PyObject *mod, PyObject *const *args, P
 }
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-PyCaravanGL_API caravan_bind_default_framebuffer([[maybe_unused]] PyObject *mod,
-                                                 [[maybe_unused]] PyObject *args) {
+PyCaravanGL_API caravan_meth_bind_default_framebuffer([[maybe_unused]] PyObject *mod,
+                                                      [[maybe_unused]] PyObject *args) {
     WithActiveGL(OpenGL, cv_state, nullptr) {
         cv_set_fbo_combined(cv_state, 0); // Lazy bind
     }
     Py_RETURN_NONE;
 }
 
-PyCaravanGL_API caravan_viewport(PyObject *mod, PyObject *const *args, Py_ssize_t nargs,
-                                 PyObject *kwnames) {
+PyCaravanGL_API caravan_meth_viewport(PyObject *mod, PyObject *const *args, Py_ssize_t nargs,
+                                      PyObject *kwnames) {
     // Keep module state for parsers (parsers are global/immutable)
     auto state = get_caravan_state(mod);
 
@@ -241,8 +241,8 @@ PyCaravanGL_API caravan_viewport(PyObject *mod, PyObject *const *args, Py_ssize_
  * Allows Python to see which context is active on the current thread.
  */
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-PyCaravanGL_API caravan_get_active_context([[maybe_unused]] PyObject *mod,
-                                           [[maybe_unused]] PyObject *args) {
+PyCaravanGL_API caravan_meth_get_active_context([[maybe_unused]] PyObject *mod,
+                                                [[maybe_unused]] PyObject *args) {
     if (cv_active_context) {
         return Py_NewRef(cv_active_context);
     }
@@ -288,7 +288,7 @@ PyCaravanGL_API caravan_meth_enable_debug([[maybe_unused]] PyObject *mod,
 }
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-PyCaravanGL_API caravan_memory_barrier([[maybe_unused]] PyObject *mod, PyObject *arg) {
+PyCaravanGL_API caravan_meth_memory_barrier([[maybe_unused]] PyObject *mod, PyObject *arg) {
     [[maybe_unused]] uint32_t mask = PyLong_AsUnsignedLong(arg);
     WithActiveGL(OpenGL, cv_state, nullptr) {
 #ifndef __APPLE__
@@ -587,33 +587,29 @@ PyCaravanGL_Status caravan_clear(PyObject *module) {
                                     nullptr);
 }
 
+#define MODULE_NOARGS(name)                                                                        \
+    {#name, CARAVAN_CAST(CARAVAN_JOIN(caravan_meth_, name)), METH_NOARGS, nullptr}
+#define MODULE_FASTCALL(name)                                                                      \
+    {#name, CARAVAN_CAST(CARAVAN_JOIN(caravan_meth_, name)), METH_FASTCALL | METH_KEYWORDS, nullptr}
+#define MODULE_O(name) {#name, CARAVAN_CAST(CARAVAN_JOIN(caravan_meth_, name)), METH_O, nullptr}
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 static PyModuleDef caravan_module = {
     PyModuleDef_HEAD_INIT,
     .m_name = "caravangl",
     .m_doc = "CaravanGL: Modern Isolated OpenGL Context",
     .m_size = sizeof(CaravanState),
-    .m_methods =
-        (PyMethodDef[]){
+    .m_methods = (PyMethodDef[]){MODULE_NOARGS(enable_debug),
+                                 MODULE_NOARGS(context),
+                                 MODULE_O(inspect),
+                                 MODULE_FASTCALL(clear),
+                                 MODULE_FASTCALL(clear_color),
+                                 MODULE_NOARGS(bind_default_framebuffer),
+                                 MODULE_FASTCALL(viewport),
+                                 MODULE_NOARGS(get_active_context),
+                                 MODULE_O(memory_barrier),
+                                 {}
 
-            {"enable_debug", (PyCFunction)caravan_meth_enable_debug, METH_NOARGS,
-             "Enable GL Debug Output"},
-            {"context", CARAVAN_CAST(caravan_meth_context), METH_NOARGS, "Get capabilities"},
-            {"inspect", (PyCFunction)caravan_meth_inspect, METH_O, "Inspect internal C/GL state"},
-            {"clear", CARAVAN_CAST(caravan_meth_clear), METH_FASTCALL | METH_KEYWORDS,
-             "Clear buffers (e.g. COLOR_BUFFER_BIT)"},
-            {"clear_color", CARAVAN_CAST(caravan_meth_clear_color), METH_FASTCALL | METH_KEYWORDS,
-             "Set clear color"},
-            {"bind_default_framebuffer", (PyCFunction)caravan_bind_default_framebuffer, METH_NOARGS,
-             "Bind the main window screen."},
-            {"viewport", CARAVAN_CAST(caravan_viewport), METH_FASTCALL | METH_KEYWORDS,
-             "Set the drawing region"},
-            {"get_active_context", CARAVAN_CAST(caravan_get_active_context), METH_NOARGS,
-             "Get the active context."},
-            {"memory_barrier", (PyCFunction)caravan_memory_barrier, METH_O, nullptr},
-            {}
-
-        },
+    },
     .m_slots =
         (PyModuleDef_Slot[]){
 

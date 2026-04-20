@@ -141,6 +141,12 @@ PyCaravanGL_API Framebuffer_bind(PyCaravanFramebuffer *self, [[maybe_unused]] Py
     Py_RETURN_NONE;
 }
 
+#define FRAME_NOARGS(name)                                                                         \
+    {#name, CARAVAN_CAST(CARAVAN_JOIN(Framebuffer_, name)), METH_NOARGS, nullptr}
+#define FRAME_FASTCALL(name)                                                                       \
+    {#name, CARAVAN_CAST(CARAVAN_JOIN(Framebuffer_, name)), METH_FASTCALL | METH_KEYWORDS, nullptr}
+#define FRAME_O(name) {#name, CARAVAN_CAST(CARAVAN_JOIN(Framebuffer_, name)), METH_O, nullptr}
+
 // NOLINTNEXTLINE(misc-use-internal-linkage)
 const PyType_Spec Framebuffer_spec = {
     .name = "caravangl.Framebuffer",
@@ -155,13 +161,9 @@ const PyType_Spec Framebuffer_spec = {
             {Py_tp_methods,
              (PyMethodDef[]){
 
-                 {"attach_texture", CARAVAN_CAST(Framebuffer_attach_texture),
-                  METH_FASTCALL | METH_KEYWORDS, "Attach a texture to the Framebuffer."},
-                 {"check_status", (PyCFunction)Framebuffer_check_status, METH_NOARGS,
-                  "Verify FBO completeness."},
-                 {"bind", (PyCFunction)Framebuffer_bind, METH_NOARGS,
-                  "Bind as the active Framebuffer."},
-                 {}}
+                 FRAME_FASTCALL(attach_texture), FRAME_NOARGS(check_status), FRAME_NOARGS(bind), {}
+
+             }
 
             },
             {}},

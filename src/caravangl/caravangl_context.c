@@ -255,14 +255,14 @@ PyCaravanGL_Status Context_clear(PyCaravanContext *self) {
 }
 
 // Getter for os_make_current_cb
-PyCaravanGL_API Context_get_make_current_cb(PyCaravanContext *self,
-                                            [[maybe_unused]] void *closure) {
+PyCaravanGL_API Context_get_os_make_current_cb(PyCaravanContext *self,
+                                               [[maybe_unused]] void *closure) {
     return Py_NewRef(self->os_make_current_cb);
 }
 
 // Setter for os_make_current_cb
-PyCaravanGL_Status Context_set_make_current_cb(PyCaravanContext *self, PyObject *value,
-                                               [[maybe_unused]] void *closure) {
+PyCaravanGL_Status Context_set_os_make_current_cb(PyCaravanContext *self, PyObject *value,
+                                                  [[maybe_unused]] void *closure) {
     if (value == nullptr) {
         PyErr_SetString(PyExc_TypeError, "Cannot delete os_make_current_cb");
         return -1;
@@ -272,13 +272,13 @@ PyCaravanGL_Status Context_set_make_current_cb(PyCaravanContext *self, PyObject 
 }
 
 // NEW: Getter for os_release_cb
-PyCaravanGL_API Context_get_release_cb(PyCaravanContext *self, [[maybe_unused]] void *closure) {
+PyCaravanGL_API Context_get_os_release_cb(PyCaravanContext *self, [[maybe_unused]] void *closure) {
     return Py_NewRef(self->os_release_cb);
 }
 
 // NEW: Setter for os_release_cb
-PyCaravanGL_Status Context_set_release_cb(PyCaravanContext *self, PyObject *value,
-                                          [[maybe_unused]] void *closure) {
+PyCaravanGL_Status Context_set_os_release_cb(PyCaravanContext *self, PyObject *value,
+                                             [[maybe_unused]] void *closure) {
     if (value == nullptr) {
         PyErr_SetString(PyExc_TypeError, "Cannot delete os_release_cb");
         return -1;
@@ -286,6 +286,21 @@ PyCaravanGL_Status Context_set_release_cb(PyCaravanContext *self, PyObject *valu
     Py_XSETREF(self->os_release_cb, Py_NewRef(value));
     return 0;
 }
+
+#define CONTEXT_NOARGS(name)                                                                       \
+    {#name, CARAVAN_CAST(CARAVAN_JOIN(Context_, name)), METH_NOARGS, nullptr}
+#define CONTEXT_FASTCALL(name)                                                                     \
+    {#name, CARAVAN_CAST(CARAVAN_JOIN(Context_, name)), METH_FASTCALL | METH_KEYWORDS, nullptr}
+#define CONTEXT_O(name) {#name, CARAVAN_CAST(CARAVAN_JOIN(Context_, name)), METH_O, nullptr}
+
+// For Read/Write
+#define CONTEXT_GETSET(name)                                                                       \
+    {#name, (getter)CARAVAN_JOIN(Context_get_, name), (setter)CARAVAN_JOIN(Context_set_, name),    \
+     nullptr, nullptr}
+
+// For Read-Only
+#define CONTEXT_GET(name)                                                                          \
+    {#name, (getter)CARAVAN_JOIN(Context_get_, name), nullptr, nullptr, nullptr}
 
 // NOLINTNEXTLINE(misc-use-internal-linkage)
 const PyType_Spec Context_spec = {
@@ -300,18 +315,16 @@ const PyType_Spec Context_spec = {
             {Py_tp_getset,
              (PyGetSetDef[]){
 
-                 {"os_make_current_cb", (getter)Context_get_make_current_cb,
-                  (setter)Context_set_make_current_cb, "Callback for Context Acquisition", nullptr},
-                 {"os_release_cb", (getter)Context_get_release_cb, (setter)Context_set_release_cb,
-                  "Callback for Context Release", nullptr},
-                 {}}
+                 CONTEXT_GETSET(os_make_current_cb), CONTEXT_GETSET(os_release_cb), {}
+
+             }
 
             },
             {Py_tp_methods,
              (PyMethodDef[]){
 
-                 {"make_current", (PyCFunction)Context_make_current, METH_NOARGS,
-                  "Activate this context"},
+                 CONTEXT_NOARGS(make_current),
+                 // No macro for these methods!
                  {"__enter__", (PyCFunction)Context_enter, METH_NOARGS, nullptr},
                  {"__exit__", (PyCFunction)Context_exit, METH_VARARGS,
                   nullptr}, // __exit__ takes 3 args
