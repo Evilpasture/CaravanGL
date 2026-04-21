@@ -119,10 +119,22 @@ void caravan_flush_garbage(CaravanHandle *h) {
     }
 }
 
+/**
+ * caravan_make_current:
+ * Thread-safely activates the handle and flushes its garbage.
+ */
 void caravan_make_current(CaravanHandle *h) {
+    // 1. TLS update is always thread-safe (it's local to this OS thread)
     cv_current_handle = h;
+
     if (h != nullptr) {
+        // 2. LOCK: Protect the garbage queue from background threads
+        // (like the Python GC or a worker thread) enqueuing items.
+        MagMutex_Lock(&h->ctx.state_lock);
+
         caravan_flush_garbage(h);
+
+        MagMutex_Unlock(&h->ctx.state_lock);
     }
 }
 

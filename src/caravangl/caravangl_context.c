@@ -8,26 +8,19 @@
 thread_local PyCaravanContext *cv_active_context = nullptr;
 
 PyCaravanGL_API Context_make_current(PyCaravanContext *self, [[maybe_unused]] PyObject *args) {
-    // 1. LOCK FIRST. No one can steal the context or draw while we are switching.
-    MagMutex_Lock(&self->handle.ctx.state_lock);
-
-    // 2. Call the Python OS callback while holding the lock
+    // 1. Call Python-only callbacks first (e.g. glfwMakeContextCurrent)
     if (self->os_make_current_cb && self->os_make_current_cb != Py_None) {
         PyObject *res = PyObject_CallNoArgs(self->os_make_current_cb);
-        if (!res) {
-            MagMutex_Unlock(&self->handle.ctx.state_lock);
+        if (!res)
             return nullptr;
-        }
         Py_DECREF(res);
     }
 
-    // 3. Trigger the Pure C core logic (Updates TLS and flushes garbage)
+    // 2. Synchronize Python TLS
     cv_active_context = self;
 
+    // 3. Trigger Core Logic (Handles the mutex and garbage flush internally)
     caravan_make_current(&self->handle);
-
-    // 4. UNLOCK
-    MagMutex_Unlock(&self->handle.ctx.state_lock);
 
     Py_RETURN_NONE;
 }
