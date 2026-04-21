@@ -24,6 +24,7 @@ python_add_library(caravangl MODULE
     src/caravangl/caravangl_framebuffer.c
     src/caravangl/caravangl_sampler.c
     src/caravangl/caravangl_context.c
+    src/core/caravangl_core.c
     src/caravangl/caravangl_sync.c
     src/caravangl/caravangl_query.c
     src/caravangl/caravangl_compute.c
@@ -64,6 +65,8 @@ else()
 endif()
 
 target_include_directories(caravangl PRIVATE include)
+
+target_compile_definitions(caravangl PRIVATE CARAVANGL_PYTHON_BINDINGS)
 
 if(APPLE)
     # Required for Python modules on macOS

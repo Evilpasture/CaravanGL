@@ -1,7 +1,9 @@
 #pragma once
 #include "caravangl_arg_indices.h"
+#include "caravangl_context.h"
 #include "caravangl_state.h"
 #include "mag_mutex.h"
+#include "pycaravangl.h"
 #include <Python.h>
 
 typedef struct CaravanState {
@@ -37,6 +39,23 @@ static inline void internal_cv_auto_unlock(MagMutex **mod) {
     }
 }
 
+// Declare the Python-wrapper TLS pointer
+extern thread_local PyCaravanContext *cv_active_context;
+
+/**
+ * WithActiveGL: TLS-aware version for top-level Python methods.
+ * Now references the Pure C cv_current_handle.
+ */
+#define WithActiveGL(gl_name, state_name, ...)                                                     \
+    /* 1. Capture the Python Object so the inner code can use it (e.g. Py_NewRef(_cv_ctx)) */      \
+    PyCaravanContext *_cv_ctx = cv_active_context;                                                 \
+    if (!_cv_ctx) [[clang::unlikely]] {                                                            \
+        PyErr_SetString(PyExc_RuntimeError, "No active CaravanGL context on this thread.");        \
+        return __VA_ARGS__;                                                                        \
+    }                                                                                              \
+    /* 2. Pass the handle to the Pure C macro */                                                   \
+    WithHandle(&_cv_ctx->handle, gl_name, state_name)
+
 /**
  * WithContext: Wraps a PyCaravanContext pointer and extracts the handle.
  */
@@ -44,27 +63,19 @@ static inline void internal_cv_auto_unlock(MagMutex **mod) {
     WithHandle(&(py_ctx_ptr)->handle, gl_name, state_name)
 
 /**
- * WithActiveGL: The TLS-aware version for top-level Python methods.
+ * CV_SAFE_DEALLOC: Thread-safe deferred deletion.
+ * Refactored to use the handle and the core garbage enqueuer.
  */
-#define WithActiveGL(gl_name, state_name, ...)                                                     \
-    PyCaravanContext *_cv_ctx = cv_active_context;                                                 \
-    if (!_cv_ctx) [[clang::unlikely]] {                                                            \
-        PyErr_SetString(PyExc_RuntimeError, "No active CaravanGL context on this thread.");        \
-        return __VA_ARGS__;                                                                        \
-    }                                                                                              \
-    WithHandle(&_cv_ctx->handle, gl_name, state_name)
-
 #define CV_SAFE_DEALLOC(obj_ptr, id_field, count_field, array_field, gl_delete_call)               \
     do {                                                                                           \
         if ((obj_ptr)->id_field != 0 && (obj_ptr)->owning_context) {                               \
             PyCaravanContext *owning_context = (obj_ptr)->owning_context;                          \
-            if (owning_context == cv_active_context) {                                             \
-                /* Current thread owns this, delete immediately */                                 \
+            /* Check if the active PURE C handle belongs to our owning Python context */           \
+            if (&owning_context->handle == cv_current_handle) {                                    \
                 WithContext(owning_context, OpenGL, _unused) {                                     \
                     gl_delete_call;                                                                \
                 }                                                                                  \
             } else {                                                                               \
-                /* Thread mismatch, enqueue for later */                                           \
                 MagMutex_Lock(&owning_context->handle.ctx.state_lock);                             \
                 cv_enqueue_garbage(&owning_context->handle.garbage.count_field,                    \
                                    owning_context->handle.garbage.array_field,                     \
