@@ -1,4 +1,5 @@
 #include "caravangl_context.h"
+#include "caravangl_module.h"
 #include "caravangl_state.h"
 #include "pycaravangl.h"
 

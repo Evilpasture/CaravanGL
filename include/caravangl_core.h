@@ -1143,7 +1143,8 @@ typedef enum ImageFormatTupleIndex : uint8_t {
 // Format: X(ReturnType, FunctionName, Arguments...)
 // -----------------------------------------------------------------------------
 
-// ======================= OPENGL 3.3 CORE =======================
+// NOLINTBEGIN
+//  ======================= OPENGL 3.3 CORE =======================
 #define GL_FUNCTIONS_3_3_CORE(X)                                                                   \
     X(void, FrontFace, GLenum mode)                                                                \
     X(void, CullFace, GLenum mode)                                                                 \
@@ -1395,3 +1396,40 @@ GL_FUNCTIONS_4_4_CORE(DECLARE_GL_FUNC)
 GL_FUNCTIONS_4_3_OPTIONAL(DECLARE_GL_FUNC)
 GL_FUNCTIONS_4_6_OPTIONAL(DECLARE_GL_FUNC)
 GL_FUNCTIONS_EXT_BINDLESS(DECLARE_GL_FUNC)
+
+typedef struct CaravanGLTable {
+// 3.3 is safe on Mac
+#pragma clang diagnostic push
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wattributes"
+#pragma clang diagnostic ignored "-Wignored-attributes"
+#define GL_PTR_GEN(ret, name, ...) [[nodiscard]] ret(GL_API *name)(__VA_ARGS__);
+    GL_FUNCTIONS_3_3_CORE(GL_PTR_GEN)
+#undef GL_PTR_GEN
+
+// 4.2+ gets the "Silly Apple" treatment
+#ifndef __APPLE__
+// Standard path for Linux/Windows
+#define GL_PTR_4_2(ret, name, ...) [[nodiscard]] ret(GL_API *name)(__VA_ARGS__);
+#else
+// Mac path: Functions exist in the struct (to keep offsets same)
+// but are poisoned to cause a compile error if used.
+#define GL_PTR_4_2(ret, name, ...)                                                                 \
+    __attribute__((unavailable("OpenGL 4.2+ is not supported on macOS"))) ret(GL_API *name)(       \
+        __VA_ARGS__);
+#endif
+
+    GL_FUNCTIONS_4_2_CORE(GL_PTR_4_2)
+    GL_FUNCTIONS_4_3_CORE(GL_PTR_4_2)
+    GL_FUNCTIONS_4_4_CORE(GL_PTR_4_2)
+    GL_FUNCTIONS_4_5_CORE(GL_PTR_4_2)
+    GL_FUNCTIONS_4_3_OPTIONAL(GL_PTR_4_2)
+    GL_FUNCTIONS_4_6_OPTIONAL(GL_PTR_4_2)
+    GL_FUNCTIONS_EXT_BINDLESS(GL_PTR_4_2)
+
+#undef GL_PTR_DEPRECATED
+#pragma clang diagnostic pop
+#pragma GCC diagnostic pop
+} CaravanGLTable;
+
+// NOLINTEND

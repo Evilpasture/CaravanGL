@@ -142,7 +142,7 @@ typedef struct CaravanRenderState {
 static_assert(sizeof(CaravanRenderState) == 128,
               "CaravanRenderState must be exactly 128 bytes (2 cache lines).");
 
-typedef enum : uint8_t {
+typedef enum CaravanDirtyFlags : uint8_t {
     CV_DIRTY_PROGRAM = 1U << 0U,
     CV_DIRTY_VAO = 1U << 1U,
     CV_DIRTY_FBO_DRAW = 1U << 2U,
@@ -282,3 +282,13 @@ typedef struct CaravanGarbage {
     GLuint queries[CARAVAN_GARBAGE_SIZE];
     size_t query_count;
 } CaravanGarbage;
+
+/**
+ * CaravanHandle: The heart of a context.
+ * This has NO Python dependencies.
+ */
+typedef struct CaravanHandle {
+    CaravanContext ctx;     // Alignment: 64
+    CaravanGLTable gl;      // Alignment: 8
+    CaravanGarbage garbage; // Alignment: 8
+} CaravanHandle;

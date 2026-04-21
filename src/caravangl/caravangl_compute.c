@@ -1,4 +1,6 @@
+#include "caravangl_arg_indices.h"
 #include "caravangl_context.h"
+#include "caravangl_module.h"
 #include "pycaravangl.h"
 
 GLuint compile_shader(const CaravanGLTable *OpenGL, GLenum type, const char *source);

@@ -1,4 +1,5 @@
 #include "caravangl_context.h"
+#include "caravangl_module.h"
 #include "pycaravangl.h"
 #include <ctype.h> // Required for isspace()
 

@@ -77,9 +77,7 @@ static inline int caravan_dispatch_members(PyObject **members[], size_t count,
 typedef struct PyCaravanContext {
     PyObject_HEAD
 
-        CaravanGLTable gl;  // Function pointers per-context
-    CaravanContext ctx;     // The Shadow State & Mutex
-    CaravanGarbage garbage; // Deferred deletion queue
+        CaravanHandle handle;
 
     // Optional callback to trigger the OS-level glfwMakeContextCurrent
     PyObject *os_make_current_cb;

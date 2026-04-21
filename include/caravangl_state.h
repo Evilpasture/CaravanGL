@@ -1,5 +1,4 @@
 #pragma once
-#include "caravangl_module.h"
 #include "caravangl_specs.h"
 
 // -----------------------------------------------------------------------------
@@ -276,3 +275,26 @@ static inline void cv_sync_render_state(CaravanContext *ctx, const CaravanGLTabl
     cv_sync_cull(OpenGL, curr, req);
     cv_sync_blend(OpenGL, curr, req);
 }
+
+// Pure C RAII Lock
+static inline void caravan_auto_unlock(MagMutex **mutex) {
+    if (*mutex) {
+        MagMutex_Unlock(*mutex);
+    }
+}
+
+/**
+ * WithHandle: The Pure C RAII locking engine.
+ * caches the pointer, locks the mutex, and provides 'gl' and 'state'.
+ */
+#define WithHandle(handle_ptr, gl_name, state_name)                                                \
+    _Pragma("unroll 69") for (int _cv_done = 0; !_cv_done; _cv_done = 1)                           \
+        _Pragma("unroll 420") for (CaravanHandle *_cv_h = (handle_ptr); !_cv_done; _cv_done = 1)   \
+            _Pragma("unroll 67") for (MagMutex * _cv_l [[gnu::cleanup(caravan_auto_unlock)]] =     \
+                                          (MagMutex_Lock(&_cv_h->ctx.state_lock),                  \
+                                           &_cv_h->ctx.state_lock);                                \
+                                      !_cv_done; _cv_done = 1)                                     \
+                _Pragma("unroll 80085") for (CaravanContext * (state_name) = &_cv_h->ctx;          \
+                                             !_cv_done; _cv_done = 1)                              \
+                    _Pragma("unroll 101") for (const CaravanGLTable *const(gl_name) = &_cv_h->gl;  \
+                                               !_cv_done; _cv_done = 1)

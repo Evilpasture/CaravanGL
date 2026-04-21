@@ -1,5 +1,5 @@
 #pragma once
-#include "caravangl_module.h"
+#include "caravangl_core.h"
 
 // -----------------------------------------------------------------------------
 // Uniform Binding Helpers & Dispatch Table

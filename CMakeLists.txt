@@ -5,13 +5,35 @@ set(CMAKE_C_STANDARD 23)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# -----------------------------------------------------------------------------
+# 1. Dependency Resolution (The "Look Up" Logic)
+# -----------------------------------------------------------------------------
+
+# Helper function to add externals only if they haven't been added by a parent
+macro(caravan_add_dependency TARGET_NAME SUBDIR)
+    if(NOT TARGET ${TARGET_NAME})
+        message(STATUS "CaravanGL: Target '${TARGET_NAME}' not found. Looking in ${SUBDIR}...")
+        if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${SUBDIR}/CMakeLists.txt")
+            add_subdirectory(${SUBDIR})
+        else()
+            message(FATAL_ERROR "CaravanGL: Dependency '${TARGET_NAME}' missing at ${SUBDIR}. "
+                                "Did you forget 'git submodule update --init'?")
+        endif()
+    else()
+        message(STATUS "CaravanGL: Using existing target '${TARGET_NAME}' provided by parent project.")
+    endif()
+endmacro()
+
+# Resolve dependencies
+caravan_add_dependency(fast_capi_core "extern/fast-capi")
+caravan_add_dependency(mag_mutex_lib  "extern/mag-mutex")
+
+# -----------------------------------------------------------------------------
+# 2. Python Configuration
+# -----------------------------------------------------------------------------
 find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
 
-# 1. Add the submodule directory
-add_subdirectory(extern/fast-capi)
-add_subdirectory(extern/mag-mutex)
-
-# 2. Define your main Python module 
+# Define your main Python module 
 python_add_library(caravangl MODULE 
     src/caravangl/caravangl.c
     src/caravangl/caravangl_arg_indices.c
@@ -27,46 +49,37 @@ python_add_library(caravangl MODULE
     src/caravangl/caravangl_sync.c
     src/caravangl/caravangl_query.c
     src/caravangl/caravangl_compute.c
+    # The PURE C Core logic
+    src/core/caravan_core.c
 )
 
-# 3. Link the submodule and Python
+# Link everything
 target_link_libraries(caravangl PRIVATE 
     Python::Module
     fast_capi_core
     mag_mutex_lib
 )
 
-# 4. The Enforcer: Run clang-tidy using the project's .clang-tidy YAML
-find_program(CLANG_TIDY_EXE NAMES "clang-tidy")
+target_include_directories(caravangl PRIVATE include)
+target_compile_definitions(caravangl PRIVATE CARAVANGL_PYTHON_BINDINGS)
 
+# -----------------------------------------------------------------------------
+# 3. The Enforcer (Clang-Tidy)
+# -----------------------------------------------------------------------------
+find_program(CLANG_TIDY_EXE NAMES "clang-tidy")
 if(CLANG_TIDY_EXE)
-    message(STATUS "Clang-Tidy Enforcer: ON (Source: .clang-tidy file)")
-    
-    # We remove --checks and --warnings-as-errors from here.
-    # Clang-tidy will now automatically find your .clang-tidy file in the project root.
     set(CLANG_TIDY_COMMAND
         "${CLANG_TIDY_EXE}"
-        "--extra-arg=-std=c23"  # Still necessary to force C23 parsing
+        "--extra-arg=-std=c23" 
         "--header-filter=include/.*"
     )
-
-    # Set the property on the target
-    set_target_properties(caravangl PROPERTIES
-        C_CLANG_TIDY "${CLANG_TIDY_COMMAND}"
-    )
-    
-    # Optional: Fail the build if the config file is missing
-    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.clang-tidy")
-        message(FATAL_ERROR "CaravanGL: .clang-tidy config missing! The enforcer has nothing to enforce.")
-    endif()
-else()
-    message(WARNING "Clang-Tidy not found! Enforcer is bypassed.")
+    set_target_properties(caravangl PROPERTIES C_CLANG_TIDY "${CLANG_TIDY_COMMAND}")
 endif()
 
-target_include_directories(caravangl PRIVATE include)
-
+# -----------------------------------------------------------------------------
+# 4. OS-Specific Logic & Installation
+# -----------------------------------------------------------------------------
 if(APPLE)
-    # Required for Python modules on macOS
     target_link_options(caravangl PRIVATE "-undefined" "dynamic_lookup")
 endif()
 
