@@ -1143,7 +1143,8 @@ typedef enum ImageFormatTupleIndex : uint8_t {
 // Format: X(ReturnType, FunctionName, Arguments...)
 // -----------------------------------------------------------------------------
 
-// ======================= OPENGL 3.3 CORE =======================
+// NOLINTBEGIN
+//  ======================= OPENGL 3.3 CORE =======================
 #define GL_FUNCTIONS_3_3_CORE(X)                                                                   \
     X(void, FrontFace, GLenum mode)                                                                \
     X(void, CullFace, GLenum mode)                                                                 \
@@ -1430,3 +1431,5 @@ typedef struct CaravanGLTable {
 #pragma clang diagnostic pop
 #pragma GCC diagnostic pop
 } CaravanGLTable;
+
+// NOLINTEND

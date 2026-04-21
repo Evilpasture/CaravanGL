@@ -8,6 +8,7 @@
  */
 
 #include "caravangl_context.h"
+#include "caravangl_module.h"
 #include "caravangl_state.h"
 #define PY_SSIZE_T_CLEAN
 #include "caravangl_arg_indices.h"

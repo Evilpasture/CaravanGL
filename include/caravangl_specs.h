@@ -282,3 +282,13 @@ typedef struct CaravanGarbage {
     GLuint queries[CARAVAN_GARBAGE_SIZE];
     size_t query_count;
 } CaravanGarbage;
+
+/**
+ * CaravanHandle: The heart of a context.
+ * This has NO Python dependencies.
+ */
+typedef struct CaravanHandle {
+    CaravanContext ctx;     // Alignment: 64
+    CaravanGLTable gl;      // Alignment: 8
+    CaravanGarbage garbage; // Alignment: 8
+} CaravanHandle;

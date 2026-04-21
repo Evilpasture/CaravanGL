@@ -15,8 +15,8 @@ thread_local PyCaravanContext *cv_active_context = nullptr;
  * Called once during caravan.init() (already inside the lock).
  */
 static void query_capabilities(PyCaravanContext *self) {
-    const CaravanGLTable *const OpenGL = &self->gl;
-    CaravanContext *ctx = &self->ctx;
+    const CaravanGLTable *const OpenGL = &self->handle.gl;
+    CaravanContext *ctx = &self->handle.ctx;
     if (OpenGL->GetIntegerv == nullptr) {
         return;
     }
@@ -80,42 +80,43 @@ void cv_enqueue_garbage(size_t *count, GLuint *array, GLuint id) {
  */
 void cv_flush_garbage(PyCaravanContext *self) {
     // This is called while the MagMutex is already held by Context_make_current
-    CaravanGarbage *garbage = &self->garbage;
+    CaravanGarbage *garbage = &self->handle.garbage;
+    const auto OpenGL = &self->handle.gl;
 
     if (garbage->buffer_count > 0) {
-        self->gl.DeleteBuffers((GLsizei)garbage->buffer_count, garbage->buffers);
+        OpenGL->DeleteBuffers((GLsizei)garbage->buffer_count, garbage->buffers);
         garbage->buffer_count = 0;
     }
 
     if (garbage->texture_count > 0) {
-        self->gl.DeleteTextures((GLsizei)garbage->texture_count, garbage->textures);
+        OpenGL->DeleteTextures((GLsizei)garbage->texture_count, garbage->textures);
         garbage->texture_count = 0;
     }
 
     if (garbage->vao_count > 0) {
-        self->gl.DeleteVertexArrays((GLsizei)garbage->vao_count, garbage->vaos);
+        OpenGL->DeleteVertexArrays((GLsizei)garbage->vao_count, garbage->vaos);
         garbage->vao_count = 0;
     }
 
     if (garbage->fbo_count > 0) {
-        self->gl.DeleteFramebuffers((GLsizei)garbage->fbo_count, garbage->fbos);
+        OpenGL->DeleteFramebuffers((GLsizei)garbage->fbo_count, garbage->fbos);
         garbage->fbo_count = 0;
     }
 
     if (garbage->rbo_count > 0) {
-        self->gl.DeleteRenderbuffers((GLsizei)garbage->rbo_count, garbage->rbos);
+        OpenGL->DeleteRenderbuffers((GLsizei)garbage->rbo_count, garbage->rbos);
         garbage->rbo_count = 0;
     }
 
     if (garbage->sampler_count > 0) {
-        self->gl.DeleteSamplers((GLsizei)garbage->sampler_count, garbage->samplers);
+        OpenGL->DeleteSamplers((GLsizei)garbage->sampler_count, garbage->samplers);
         garbage->sampler_count = 0;
     }
 
     if (garbage->program_count > 0) {
 #pragma unroll 4
         for (int i = 0; i < garbage->program_count; i++) {
-            self->gl.DeleteProgram(garbage->programs[i]);
+            OpenGL->DeleteProgram(garbage->programs[i]);
         }
         garbage->program_count = 0;
     }
@@ -123,13 +124,13 @@ void cv_flush_garbage(PyCaravanContext *self) {
     if (garbage->sync_count > 0) {
 #pragma unroll 4
         for (int i = 0; i < garbage->sync_count; i++) {
-            self->gl.DeleteSync(garbage->syncs[i]);
+            OpenGL->DeleteSync(garbage->syncs[i]);
         }
         garbage->sync_count = 0;
     }
 
     if (garbage->query_count > 0) {
-        self->gl.DeleteQueries((GLsizei)garbage->query_count, garbage->queries);
+        OpenGL->DeleteQueries((GLsizei)garbage->query_count, garbage->queries);
         garbage->query_count = 0;
     }
 }
@@ -140,13 +141,13 @@ void cv_flush_garbage(PyCaravanContext *self) {
  */
 PyCaravanGL_API Context_make_current(PyCaravanContext *self, [[maybe_unused]] PyObject *args) {
     // 1. LOCK FIRST. No one can steal the context or draw while we are switching.
-    MagMutex_Lock(&self->ctx.state_lock);
+    MagMutex_Lock(&self->handle.ctx.state_lock);
 
     // 2. Call the OS callback while holding the lock
     if (self->os_make_current_cb && self->os_make_current_cb != Py_None) {
         PyObject *res = PyObject_CallNoArgs(self->os_make_current_cb);
         if (!res) {
-            MagMutex_Unlock(&self->ctx.state_lock); // Don't forget to unlock on error!
+            MagMutex_Unlock(&self->handle.ctx.state_lock); // Don't forget to unlock on error!
             return nullptr;
         }
         Py_DECREF(res);
@@ -159,7 +160,7 @@ PyCaravanGL_API Context_make_current(PyCaravanContext *self, [[maybe_unused]] Py
     cv_flush_garbage(self);
 
     // 5. UNLOCK
-    MagMutex_Unlock(&self->ctx.state_lock);
+    MagMutex_Unlock(&self->handle.ctx.state_lock);
 
     Py_RETURN_NONE;
 }
@@ -204,16 +205,16 @@ PyCaravanGL_Status Context_init(PyCaravanContext *self, PyObject *args, PyObject
     }
 
     // 1. Initialize Thread-Safety and Shadow State
-    self->ctx.state_lock = (MagMutex){};
-    self->ctx.bound = (typeof(self->ctx.bound)){};
-    self->garbage = (CaravanGarbage){};
+    self->handle.ctx.state_lock = (MagMutex){};
+    self->handle.ctx.bound = (typeof(self->handle.ctx.bound)){};
+    self->handle.garbage = (CaravanGarbage){};
 
     // Initialize viewport to a safe "null" state
-    self->ctx.viewport = (CaravanRect){0, 0, 0, 0};
+    self->handle.ctx.viewport = (CaravanRect){0, 0, 0, 0};
 
     // 2. Load OpenGL functions directly into this context instance
     // Note: We use the refactored load_gl_table from caravangl_loader.h
-    if (load_gl_table(&self->gl, loader) < 0) {
+    if (load_gl_table(&self->handle.gl, loader) < 0) {
         // load_gl_table already raises the Python RuntimeError on failure
         return -1;
     }

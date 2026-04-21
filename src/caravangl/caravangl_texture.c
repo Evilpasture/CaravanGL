@@ -1,4 +1,6 @@
+#include "caravangl_arg_indices.h"
 #include "caravangl_context.h"
+#include "caravangl_module.h"
 #include "caravangl_state.h"
 #include "pycaravangl.h"
 
@@ -38,8 +40,8 @@ PyCaravanGL_Slot Texture_dealloc(PyCaravanTexture *self) {
     if (active) {
 #pragma unroll 2
         for (int i = 0; i < CARAVAN_MAX_TEXTURE_UNITS; i++) {
-            if (active->ctx.bound.texture_units[i].id == self->tex.id) {
-                active->ctx.bound.texture_units[i].id = 0;
+            if (active->handle.ctx.bound.texture_units[i].id == self->tex.id) {
+                active->handle.ctx.bound.texture_units[i].id = 0;
             }
         }
     }

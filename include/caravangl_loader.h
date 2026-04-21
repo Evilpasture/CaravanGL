@@ -1,5 +1,4 @@
 #pragma once
-#define PY_VERSION
 #include "caravangl_core.h"
 
 #ifndef EXTERN_GL

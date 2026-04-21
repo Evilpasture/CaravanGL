@@ -24,16 +24,16 @@ PyCaravanGL_Slot Sync_dealloc(PyCaravanSync *self) {
                 OpenGL->DeleteSync(self->sync_obj);
             }
         } else {
-            MagMutex_Lock(&owning_context->ctx.state_lock);
-            if (owning_context->garbage.sync_count < CARAVAN_GARBAGE_SIZE) {
-                owning_context->garbage.syncs[owning_context->garbage.sync_count++] =
+            MagMutex_Lock(&owning_context->handle.ctx.state_lock);
+            if (owning_context->handle.garbage.sync_count < CARAVAN_GARBAGE_SIZE) {
+                owning_context->handle.garbage.syncs[owning_context->handle.garbage.sync_count++] =
                     self->sync_obj;
             } else {
                 // Garbage queue full fallback
                 // NOLINTNEXTLINE
                 (void)fprintf(stderr, "[CaravanGL] Warning: Sync garbage queue full.\n");
             }
-            MagMutex_Unlock(&owning_context->ctx.state_lock);
+            MagMutex_Unlock(&owning_context->handle.ctx.state_lock);
         }
         self->sync_obj = nullptr;
     }

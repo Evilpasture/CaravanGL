@@ -46,14 +46,14 @@ PyCaravanGL_Slot Sampler_dealloc(PyCaravanSampler *self) {
     // 1. Prevent cache poisoning on the currently active context
     PyCaravanContext *active = cv_active_context;
     if (active && self->id != 0) {
-        MagMutex_Lock(&active->ctx.state_lock);
+        MagMutex_Lock(&active->handle.ctx.state_lock);
 #pragma unroll 2
         for (int i = 0; i < CARAVAN_MAX_TEXTURE_UNITS; i++) {
-            if (active->ctx.bound.texture_units[i].sampler_id == self->id) {
-                active->ctx.bound.texture_units[i].sampler_id = 0;
+            if (active->handle.ctx.bound.texture_units[i].sampler_id == self->id) {
+                active->handle.ctx.bound.texture_units[i].sampler_id = 0;
             }
         }
-        MagMutex_Unlock(&active->ctx.state_lock);
+        MagMutex_Unlock(&active->handle.ctx.state_lock);
     }
 
     // 2. Thread-safe deferred deletion
