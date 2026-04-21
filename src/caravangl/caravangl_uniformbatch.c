@@ -1,3 +1,4 @@
+#include "caravangl_module.h"
 #include "fast_build.h"
 #include "pycaravangl.h"
 

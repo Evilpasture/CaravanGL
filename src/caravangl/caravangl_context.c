@@ -1,5 +1,6 @@
 #include "caravangl_context.h"
 #include "caravangl_loader.h"
+#include "caravangl_module.h"
 
 // Define the TLS variable
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)

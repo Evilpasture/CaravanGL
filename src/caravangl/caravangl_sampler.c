@@ -1,4 +1,6 @@
+#include "caravangl_arg_indices.h"
 #include "caravangl_context.h"
+#include "caravangl_module.h"
 #include "pycaravangl.h"
 
 PyCaravanGL_Status Sampler_init(PyCaravanSampler *self, PyObject *args, PyObject *kwds) {
