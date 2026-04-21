@@ -86,10 +86,9 @@ static void cv_load_group_modern(CaravanGLTable *table, CaravanGLLoaderFunc load
 }
 
 // -----------------------------------------------------------------------------
-// PYTHON SHIM (Only active when compiled as a Python extension)
+// PYTHON SHIM (INCLUDE Python.h before this header)
 // -----------------------------------------------------------------------------
 #ifdef PY_VERSION
-#include <Python.h>
 
 /**
  * Trampoline function: Adapts the C loader signature to Python's C API.

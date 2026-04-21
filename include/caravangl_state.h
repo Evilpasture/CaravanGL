@@ -288,13 +288,13 @@ static inline void caravan_auto_unlock(MagMutex **mutex) {
  * caches the pointer, locks the mutex, and provides 'gl' and 'state'.
  */
 #define WithHandle(handle_ptr, gl_name, state_name)                                                \
-    _Pragma("unroll 4") for (int _cv_done = 0; !_cv_done; _cv_done = 1)                            \
-        _Pragma("unroll 4") for (CaravanHandle *_cv_h = (handle_ptr); !_cv_done; _cv_done = 1)     \
-            _Pragma("unroll 4") for (MagMutex * _cv_l [[gnu::cleanup(caravan_auto_unlock)]] =      \
-                                         (MagMutex_Lock(&_cv_h->ctx.state_lock),                   \
-                                          &_cv_h->ctx.state_lock);                                 \
-                                     !_cv_done; _cv_done = 1)                                      \
-                _Pragma("unroll 4") for (CaravanContext * (state_name) = &_cv_h->ctx; !_cv_done;   \
-                                         _cv_done = 1)                                             \
-                    _Pragma("unroll 4") for (const CaravanGLTable *const(gl_name) = &_cv_h->gl;    \
-                                             !_cv_done; _cv_done = 1)
+    _Pragma("unroll 69") for (int _cv_done = 0; !_cv_done; _cv_done = 1)                           \
+        _Pragma("unroll 420") for (CaravanHandle *_cv_h = (handle_ptr); !_cv_done; _cv_done = 1)   \
+            _Pragma("unroll 67") for (MagMutex * _cv_l [[gnu::cleanup(caravan_auto_unlock)]] =     \
+                                          (MagMutex_Lock(&_cv_h->ctx.state_lock),                  \
+                                           &_cv_h->ctx.state_lock);                                \
+                                      !_cv_done; _cv_done = 1)                                     \
+                _Pragma("unroll 80085") for (CaravanContext * (state_name) = &_cv_h->ctx;          \
+                                             !_cv_done; _cv_done = 1)                              \
+                    _Pragma("unroll 101") for (const CaravanGLTable *const(gl_name) = &_cv_h->gl;  \
+                                               !_cv_done; _cv_done = 1)

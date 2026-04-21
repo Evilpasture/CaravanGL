@@ -32,11 +32,17 @@ void caravan_flush_garbage(CaravanHandle *h);
 
 /**
  * Activates the handle on the current thread and flushes pending garbage.
- * IMPORTANT: Must be called while h->ctx.state_lock is HELD.
+ * IMPORTANT: Must be called while h->ctx.state_lock is HELD at call site.
  */
 void caravan_make_current(CaravanHandle *h);
 
 /**
  * Thread-safely enqueues a GL object ID for deferred deletion.
+ * @param count Current number of elements (updated on success)
+ * @param capacity Maximum size of the array
+ * @param array The storage array
+ * @param id The OpenGL resource ID to delete
  */
-void cv_enqueue_garbage(size_t *count, GLuint *array, GLuint id);
+void cv_enqueue_garbage(size_t *count, size_t capacity, GLuint array[static 1], GLuint id);
+
+void cv_enqueue_garbage_ptr(size_t *count, size_t capacity, GLsync array[static 1], void *ptr);

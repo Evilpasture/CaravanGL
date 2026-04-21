@@ -142,7 +142,7 @@ typedef struct CaravanRenderState {
 static_assert(sizeof(CaravanRenderState) == 128,
               "CaravanRenderState must be exactly 128 bytes (2 cache lines).");
 
-typedef enum : uint8_t {
+typedef enum CaravanDirtyFlags : uint8_t {
     CV_DIRTY_PROGRAM = 1U << 0U,
     CV_DIRTY_VAO = 1U << 1U,
     CV_DIRTY_FBO_DRAW = 1U << 2U,

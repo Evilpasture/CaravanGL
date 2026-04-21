@@ -55,16 +55,19 @@ void caravan_query_caps(CaravanHandle *h) {
 #endif
 }
 
-void cv_enqueue_garbage(size_t *count, GLuint *array, GLuint id) {
-    if (id == 0) {
+void cv_enqueue_garbage(size_t *count, size_t capacity, GLuint array[static 1], GLuint id) {
+    if (id == 0) [[clang::unlikely]] {
         return;
     }
-    if (*count < CARAVAN_GARBAGE_SIZE) {
+
+    if (*count < capacity) [[clang::likely]] {
         array[(*count)++] = id;
     } else {
-        // Fallback: If the queue is totally jammed, log a warning to stderr.
+        // This is now much more useful as it tells you which specific limit was hit
         // NOLINTNEXTLINE
-        (void)fprintf(stderr, "[CaravanGL] Critical: Garbage queue overflow. ID %u leaked.\n", id);
+        (void)fprintf(stderr,
+                      "[CaravanGL] Critical: Garbage queue overflow (Cap: %zu). ID %u leaked.\n",
+                      capacity, id);
     }
 }
 
@@ -98,14 +101,14 @@ void caravan_flush_garbage(CaravanHandle *h) {
     }
     if (garbage->program_count > 0) {
 #pragma unroll 4
-        for (int i = 0; i < garbage->program_count; i++) {
+        for (size_t i = 0; i < garbage->program_count; i++) {
             OpenGL->DeleteProgram(garbage->programs[i]);
         }
         garbage->program_count = 0;
     }
     if (garbage->sync_count > 0) {
 #pragma unroll 4
-        for (int i = 0; i < garbage->sync_count; i++) {
+        for (size_t i = 0; i < garbage->sync_count; i++) {
             OpenGL->DeleteSync(garbage->syncs[i]);
         }
         garbage->sync_count = 0;
@@ -120,5 +123,17 @@ void caravan_make_current(CaravanHandle *h) {
     cv_current_handle = h;
     if (h != nullptr) {
         caravan_flush_garbage(h);
+    }
+}
+
+void cv_enqueue_garbage_ptr(size_t *count, size_t capacity, GLsync array[static 1], void *ptr) {
+    if (ptr == nullptr) {
+        return;
+    }
+    if (*count < capacity) {
+        array[(*count)++] = ptr;
+    } else {
+        // NOLINTNEXTLINE
+        (void)fprintf(stderr, "[CaravanGL] Critical: Sync garbage overflow. Memory leaked.\n");
     }
 }

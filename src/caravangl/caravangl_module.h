@@ -70,16 +70,16 @@ extern thread_local PyCaravanContext *cv_active_context;
     do {                                                                                           \
         if ((obj_ptr)->id_field != 0 && (obj_ptr)->owning_context) {                               \
             PyCaravanContext *owning_context = (obj_ptr)->owning_context;                          \
-            /* Check if the active PURE C handle belongs to our owning Python context */           \
             if (&owning_context->handle == cv_current_handle) {                                    \
                 WithContext(owning_context, OpenGL, _unused) {                                     \
                     gl_delete_call;                                                                \
                 }                                                                                  \
             } else {                                                                               \
                 MagMutex_Lock(&owning_context->handle.ctx.state_lock);                             \
-                cv_enqueue_garbage(&owning_context->handle.garbage.count_field,                    \
-                                   owning_context->handle.garbage.array_field,                     \
-                                   (obj_ptr)->id_field);                                           \
+                /* Explicit capacity passing removes the 'smell' */                                \
+                cv_enqueue_garbage(                                                                \
+                    &owning_context->handle.garbage.count_field, CARAVAN_GARBAGE_SIZE,             \
+                    owning_context->handle.garbage.array_field, (obj_ptr)->id_field);              \
                 MagMutex_Unlock(&owning_context->handle.ctx.state_lock);                           \
             }                                                                                      \
             (obj_ptr)->id_field = 0;                                                               \
