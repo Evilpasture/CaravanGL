@@ -9,8 +9,6 @@
         bool: &PyBool_Type,                                                                        \
         int: &PyLong_Type,                                                                         \
         uint32_t: &PyLong_Type,                                                                    \
-        float: &PyFloat_Type,                                                                      \
-        double: &PyFloat_Type,                                                                     \
         Py_ssize_t: &PyLong_Type,                                                                  \
         default: (PyTypeObject *)nullptr)
 
