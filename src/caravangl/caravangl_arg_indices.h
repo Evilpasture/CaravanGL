@@ -191,16 +191,13 @@ DEFINE_INDEX_GROUP(ComputeDispatch, SCHEMA_COMPUTE_DISPATCH)
 
 // Define specialized mappers to split the declarations
 #define MAP_ONLY_PARSER(Name, ...) FastParser Name##Parser;
-#define MAP_ONLY_SPECS(Name, Group, ...) FastArgSpec Name##Specs[Group##_COUNT];
 
 typedef struct CaravanParsers {
-    // Pass 1: All 64-byte structs (Perfectly packed)
+    // Each FastParser is 128 bytes, aligned to 64.
+    // This Pass is perfectly cache-aligned.
     FOR_ALL_PARSERS(MAP_ONLY_PARSER)
 
-    // Pass 2: All 48-byte spec arrays
-    FOR_ALL_PARSERS(MAP_ONLY_SPECS)
-
-    // Pass 3: The leftover scalars
+    // Registry and metadata
     size_t registry_count;
 } CaravanParsers;
 
