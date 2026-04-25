@@ -377,141 +377,41 @@ static int CaravanModule_AddUnsignedLongLongConstant(PyObject *mod, const char *
 }
 
 static int init_constants(PyObject *mod) {
-    constexpr auto smol_alignment = 16;
-    static const struct {
-        [[gnu::aligned(smol_alignment)]]
-        const char *name;
-        unsigned long long value;
-    } consts[] = {{"FLOAT", GL_FLOAT},
-                  {"TRIANGLES", GL_TRIANGLES},
-                  {"LINES", GL_LINES},
-                  {"POINTS", GL_POINTS},
+    // 1. Compile-time Duplicate Check
+    // If name is duplicated, this enum will have two identical identifiers
+    enum GL_Duplicate_Check {
+#define X(name, val) CHECK_##name,
+#include "gl_constants.inc"
+#undef X
+    };
 
-                  // --- Uniform Batch Helpers ---
-                  {"UF_1I", UF_1I},
-                  {"UF_1F", UF_1F},
-                  {"UF_2F", UF_2F},
-                  {"UF_3F", UF_3F},
-                  {"UF_4F", UF_4F},
-                  {"UF_MAT4", UF_MAT4},
-                  {"UF_3I", UF_3I}, // Added for consistency
-
-                  // --- Data Types ---
-                  {"UNSIGNED_SHORT", GL_UNSIGNED_SHORT},
-                  {"UNSIGNED_INT", GL_UNSIGNED_INT},
-                  {"UNSIGNED_BYTE", GL_UNSIGNED_BYTE},
-
-                  // --- Buffer Targets & Usage ---
-                  {"ELEMENT_ARRAY_BUFFER", GL_ELEMENT_ARRAY_BUFFER},
-                  {"ARRAY_BUFFER", GL_ARRAY_BUFFER},
-                  {"UNIFORM_BUFFER", GL_UNIFORM_BUFFER},
-                  {"STATIC_DRAW", GL_STATIC_DRAW},
-                  {"DYNAMIC_DRAW", GL_DYNAMIC_DRAW},
-                  {"STREAM_DRAW", GL_STREAM_DRAW},
-
-                  // --- Depth & Stencil Compare Functions ---
-                  {"NEVER", GL_NEVER},
-                  {"LESS", GL_LESS},
-                  {"EQUAL", GL_EQUAL},
-                  {"LEQUAL", GL_LEQUAL},
-                  {"GREATER", GL_GREATER},
-                  {"NOTEQUAL", GL_NOTEQUAL},
-                  {"GEQUAL", GL_GEQUAL},
-                  {"ALWAYS", GL_ALWAYS},
-
-                  // --- Stencil Operations ---
-                  {"KEEP", GL_KEEP},
-                  {"ZERO", GL_ZERO},
-                  {"REPLACE", GL_REPLACE},
-                  {"INCR", GL_INCR},
-                  {"INCR_WRAP", GL_INCR_WRAP},
-                  {"DECR", GL_DECR},
-                  {"DECR_WRAP", GL_DECR_WRAP},
-                  {"INVERT", GL_INVERT},
-
-                  // --- Culling ---
-                  {"FRONT", GL_FRONT},
-                  {"BACK", GL_BACK},
-                  {"FRONT_AND_BACK", GL_FRONT_AND_BACK},
-
-                  // --- Texture Constants ---
-                  {"TEXTURE_2D", GL_TEXTURE_2D},
-                  {"TEXTURE_3D", GL_TEXTURE_3D},
-                  {"RGBA", GL_RGBA},
-                  {"RGB", GL_RGB},
-                  {"RGBA8", GL_RGBA8},
-                  {"DEPTH_COMPONENT", GL_DEPTH_COMPONENT},
-                  {"DEPTH_COMPONENT24", GL_DEPTH_COMPONENT24},
-
-                  // --- Framebuffer Constants ---
-                  {"FRAMEBUFFER", GL_FRAMEBUFFER},
-                  {"COLOR_ATTACHMENT0", GL_COLOR_ATTACHMENT0},
-                  {"DEPTH_ATTACHMENT", GL_DEPTH_ATTACHMENT},
-                  {"DEPTH_STENCIL_ATTACHMENT", GL_DEPTH_STENCIL_ATTACHMENT},
-                  {"COLOR_BUFFER_BIT", GL_COLOR_BUFFER_BIT},
-                  {"DEPTH_BUFFER_BIT", GL_DEPTH_BUFFER_BIT},
-                  {"STENCIL_BUFFER_BIT", GL_STENCIL_BUFFER_BIT},
-
-                  {"DEPTH24_STENCIL8", GL_DEPTH24_STENCIL8},
-                  {"DEPTH_STENCIL", GL_DEPTH_STENCIL},
-                  {"UNSIGNED_INT_24_8", GL_UNSIGNED_INT_24_8},
-
-                  {"SRC_ALPHA", GL_SRC_ALPHA},
-                  {"ONE_MINUS_SRC_ALPHA", GL_ONE_MINUS_SRC_ALPHA},
-                  {"ONE", GL_ONE},
-                  {"ZERO", GL_ZERO},
-                  {"FUNC_ADD", GL_FUNC_ADD},
-
-                  {"NEAREST", GL_NEAREST},
-                  {"LINEAR", GL_LINEAR},
-                  {"CLAMP_TO_EDGE", GL_CLAMP_TO_EDGE},
-                  {"REPEAT", GL_REPEAT},
-
-                  {"UF_MAT4", UF_MAT4},
-                  {"UF_MAT4_RM", UF_MAT4_RM},
-
-                  {"CW", GL_CW},
-                  {"CCW", GL_CCW},
-
-                  {"TIMEOUT_IGNORED", GL_TIMEOUT_IGNORED},
-                  {"ALREADY_SIGNALED", GL_ALREADY_SIGNALED},
-                  {"TIMEOUT_EXPIRED", GL_TIMEOUT_EXPIRED},
-                  {"CONDITION_SATISFIED", GL_CONDITION_SATISFIED},
-                  {"WAIT_FAILED", GL_WAIT_FAILED},
-
-                  {"TIME_ELAPSED", GL_TIME_ELAPSED},
-                  {"TIMESTAMP", GL_TIMESTAMP},
-                  {"SAMPLES_PASSED", GL_SAMPLES_PASSED},
-                  {"ANY_SAMPLES_PASSED", GL_ANY_SAMPLES_PASSED},
-                  {"PRIMITIVES_GENERATED", GL_PRIMITIVES_GENERATED},
-
-                  {"SHADER_STORAGE_BARRIER_BIT", GL_SHADER_STORAGE_BARRIER_BIT},
-                  {"VERTEX_ATTRIB_ARRAY_BARRIER_BIT", GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT},
-                  {"ELEMENT_ARRAY_BARRIER_BIT", GL_ELEMENT_ARRAY_BARRIER_BIT},
-                  {"UNIFORM_BARRIER_BIT", GL_UNIFORM_BARRIER_BIT},
-                  {"SHADER_STORAGE_BUFFER", GL_SHADER_STORAGE_BUFFER},
-
-                  // --- Build Metadata ---
-                  {"FREE_THREADED",
-#if defined(Py_GIL_DISABLED) && Py_GIL_DISABLED
-                   1
-#else
-                   0
-#endif
-                  },
-                  {"DEBUG_BUILD",
-#ifdef CARAVANGL_DEBUG
-                   1
-#else
-                   0
-#endif
-                  }};
-#pragma unroll
-    for (size_t i = 0; i < sizeof(consts) / sizeof(consts[0]); i++) {
-        if (CaravanModule_AddUnsignedLongLongConstant(mod, consts[i].name, consts[i].value) < 0) {
-            return -1;
-        }
+    // 2. Direct Expansion Registration
+    // This expands into a series of if-statements. No array storage needed.
+#define X(name, val)                                                                               \
+    if (CaravanModule_AddUnsignedLongLongConstant(mod, #name, (unsigned long long)(val)) < 0) {    \
+        return -1;                                                                                 \
     }
+
+#include "gl_constants.inc"
+#undef X
+
+    // 3. Dynamic Build Metadata (Manual)
+    if (PyModule_AddIntConstant(mod, "FREE_THREADED", 
+#if defined(Py_GIL_DISABLED) && Py_GIL_DISABLED
+        1
+#else
+        0
+#endif
+    ) < 0) return -1;
+
+    if (PyModule_AddIntConstant(mod, "DEBUG_BUILD", 
+#ifdef CARAVANGL_DEBUG
+        1
+#else
+        0
+#endif
+    ) < 0) return -1;
+
     return 0;
 }
 
